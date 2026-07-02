@@ -1,16 +1,16 @@
 import Foundation
 import ArgumentParser
 
-// MARK: - Build Command (current functionality + foundation)
+// MARK: - Build Command
 
 struct Build: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Build the documentation from Markdown sources into styled HTML.",
-        discussion: "Currently builds from welcome-template.md (or equivalent). Full multi-file assembly, numbering, etc. tracked in issues #3, #4, #8, #9."
+        discussion: "Assembles Markdown sources (single file via --input, or multi-file lex order by default per #3) then renders to HTML. See issues #4, #8, #9 for future enhancements."
     )
 
-    @Option(name: .shortAndLong, help: "Path to input markdown file (default: welcome-template.md)")
-    var input: String = "welcome-template.md"
+    @Option(name: .shortAndLong, help: "Path to a single input Markdown file. If omitted, discovers *.md/*.markdown files in the current directory, sorts lexicographically, skips READMEs and welcome-template.md, and concatenates them.")
+    var input: String?
 
     @Option(name: .shortAndLong, help: "Output HTML path")
     var output: String = "output.html"
@@ -19,12 +19,8 @@ struct Build: ParsableCommand {
     var skipDiagrams: Bool = false
 
     func run() throws {
-        let templateURL = URL(fileURLWithPath: input)
-        guard FileManager.default.fileExists(atPath: templateURL.path) else {
-            throw ValidationError("Input file not found: \(input). Run `specticus init` (#2) to create a project, or specify --input.")
-        }
+        let markdown = try DocumentGenerator.assembleSources(input: input)
 
-        let markdown = try String(contentsOf: templateURL, encoding: .utf8)
         let html = try DocumentGenerator.generateHTML(from: markdown)
         try DocumentGenerator.writeOutput(html, to: output)
 

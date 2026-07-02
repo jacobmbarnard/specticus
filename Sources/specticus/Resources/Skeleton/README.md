@@ -6,7 +6,9 @@ A specification and documentation project managed with [specticus](https://githu
 
 ```bash
 specticus build
-# or
+# (assembles 00N-*.md files in order)
+
+# or force a single file:
 specticus build --input welcome-template.md
 ```
 
