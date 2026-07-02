@@ -10,13 +10,17 @@ A fast, beautiful documentation generator.
 
 ## Usage
 
-```swift
-let html = MarkdownParser().html(from: markdown)
-try html.write(to: outputURL, atomically: true, encoding: .utf8)
+```bash
+specticus build
+# or
+specticus init MyProject
+specticus build --input docs.md
 ```
+
+See `specticus --help` for available commands.
 
 ## Philosophy
 
 > Simple tools that get out of your way.
 
-Just getting started!
+Just getting started! (See GitHub issues for roadmap toward full SRSGem feature parity in Swift.)
