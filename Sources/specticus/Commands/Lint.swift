@@ -10,6 +10,6 @@ struct Lint: ParsableCommand {
 
     func run() throws {
         print("specticus lint is not yet implemented (issue #10).")
-        print("Planned checks: presence of key Markdown, config, CSS, PlantUML (when supported), etc.")
+        print("Planned checks: presence of key Markdown, config, CSS, Mermaid diagrams (when supported), etc.")
     }
 }

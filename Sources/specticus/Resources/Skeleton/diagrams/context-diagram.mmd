@@ -1,0 +1,13 @@
+%% Mermaid diagram (context level)
+%% https://mermaid.js.org
+%% Use in Markdown with ```mermaid ... ``` or external renderers
+
+flowchart TD
+    User[End User] --> Specticus["{{PROJECT_NAME}}"]
+    Specticus --> DataStore[(Data / Storage)]
+
+    classDef system fill:#ccfbf1,stroke:#0f766e,color:#134e4b
+    class Specticus system
+
+    note[High-level context<br/>for the system]
+    note -.-> Specticus

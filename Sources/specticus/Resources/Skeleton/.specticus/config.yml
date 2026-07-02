@@ -10,7 +10,9 @@ project:
 build:
   default_input: "welcome-template.md"
   output: "output.html"
-  plantuml_enabled: true
+  diagrams_enabled: true
+  # diagram format geared toward Mermaid (.mmd files)
+  # Mermaid diagrams can be embedded directly in Markdown or rendered externally
 
 ids:
   auto_assign: false

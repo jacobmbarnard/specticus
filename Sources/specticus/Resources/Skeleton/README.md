@@ -14,7 +14,7 @@ specticus build --input welcome-template.md
 
 - See numbered section files (001-*.md) 
 - Architecture Decision Records in `ADRs/`
-- Diagrams in `diagrams/` (PlantUML .puml files)
+- Diagrams in `diagrams/` (Mermaid .mmd files - embed with ```mermaid blocks)
 - Project config in `.specticus/config.yml`
 - Metadata in `title.yml`
 

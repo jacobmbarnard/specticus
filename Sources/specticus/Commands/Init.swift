@@ -50,7 +50,7 @@ struct Init: ParsableCommand {
         print("  • title.yml, welcome-template.md, style.css")
         print("  • 001-007 numbered section templates (lex order for future builds)")
         print("  • ADRs/ (proposed/accepted/deprecated/superseded) + example ADR")
-        print("  • diagrams/ (starter PlantUML files)")
+        print("  • diagrams/ (starter Mermaid .mmd files)")
         print("  • .specticus/config.yml")
         print("")
         print("Next steps:")
