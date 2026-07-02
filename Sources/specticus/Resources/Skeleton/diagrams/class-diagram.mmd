@@ -1,0 +1,20 @@
+%% Mermaid Class Diagram (simplified data model)
+
+classDiagram
+    class User {
+        +String email
+        +String role
+        +login()
+    }
+    class Document {
+        +String title
+        +List~Section~ sections
+        +renderHTML()
+    }
+    class Section {
+        +String heading
+        +String content
+    }
+
+    User "1" --> "*" Document : authors
+    Document "1" --> "*" Section : contains

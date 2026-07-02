@@ -1,0 +1,13 @@
+%% Mermaid Sequence Diagram
+
+sequenceDiagram
+    participant User
+    participant System as {{PROJECT_NAME}}
+    participant DB as Data Store
+
+    User->>System: Login request
+    System->>DB: Validate credentials
+    DB-->>System: Credentials valid
+    System-->>User: Login successful + token
+
+    Note over User,System: Authenticated session established

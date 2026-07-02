@@ -14,6 +14,10 @@ build:
   # diagram format geared toward Mermaid (.mmd files)
   # Mermaid diagrams can be embedded directly in Markdown or rendered externally
 
+decision_records:
+  adrs_enabled: true
+  bdrs_enabled: true
+
 ids:
   auto_assign: false
 

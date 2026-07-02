@@ -6,20 +6,27 @@ This project was initialized with `specticus init`.
 
 ## Overview
 
-Edit this file or the numbered section Markdown files (in lexicographic order) to build your documentation.
+This is a starter Software Requirements Specification (SRS) project.
 
-See:
+The documentation is assembled from the numbered Markdown files (`00N-*.md`) in lexicographic order (see `specticus build` after #3).
 
-- [System Overview](001-system-overview.md)
-- Requirements and more in other .md files
-- ADRs in the ADRs/ directory
+Key sections include:
+- Document metadata and revision history
+- System overview, business needs, and technical notes
+- Business and technical constraints, requirements, and specifications
+- Use cases and test plan
+- Diagrams (Mermaid sources in `diagrams/`)
+- Glossary, references
+- Business Decision Records (BDRs/) and Architecture Decision Records (ADRs/)
 
 ## Next Steps
 
 1. Edit `title.yml`
-2. Add your content to the .md files
+2. Fill out the numbered `.md` files and add your Mermaid diagrams
 3. Run `specticus build`
 4. (Future) `specticus lint`
+
+See the full list of starter templates and SRSGem inspiration in the project README.
 
 ---
 

@@ -1,0 +1,23 @@
+%% Mermaid Deployment Diagram
+
+flowchart TB
+    subgraph Client
+        Browser[Web Browser]
+        Mobile[Mobile App]
+    end
+
+    subgraph Server
+        API[API Server]
+        App[Application Logic]
+    end
+
+    subgraph Data
+        DB[(Database)]
+        Cache[(Cache)]
+    end
+
+    Browser --> API
+    Mobile --> API
+    API --> App
+    App --> DB
+    App --> Cache
