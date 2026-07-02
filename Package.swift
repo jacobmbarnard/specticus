@@ -15,6 +15,9 @@ let package = Package(
             dependencies: [
                 "Ink",
                 .product(name: "ArgumentParser", package: "swift-argument-parser")
+            ],
+            resources: [
+                .copy("Resources")
             ]
         ),
         .testTarget(
