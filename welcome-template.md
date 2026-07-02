@@ -23,4 +23,4 @@ See `specticus --help` for available commands.
 
 > Simple tools that get out of your way.
 
-Just getting started! (See GitHub issues for roadmap toward full SRSGem feature parity in Swift.)
+Just getting started!
