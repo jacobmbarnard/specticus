@@ -1,0 +1,9 @@
+# Project metadata (title.yml)
+# Edit this file for your project details.
+
+title: "{{PROJECT_NAME}}"
+version: "0.1.0"
+author: ""
+date: ""
+description: "Documentation and requirements specification."
+tags: []

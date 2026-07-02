@@ -15,8 +15,8 @@ struct Build: ParsableCommand {
     @Option(name: .shortAndLong, help: "Output HTML path")
     var output: String = "output.html"
 
-    @Flag(name: .long, help: "Skip diagram/PlantUML processing (placeholder for #5)")
-    var skipPuml: Bool = false
+    @Flag(name: .long, help: "Skip diagram processing (placeholder for #5; geared for Mermaid)")
+    var skipDiagrams: Bool = false
 
     func run() throws {
         let templateURL = URL(fileURLWithPath: input)
@@ -28,8 +28,8 @@ struct Build: ParsableCommand {
         let html = try DocumentGenerator.generateHTML(from: markdown)
         try DocumentGenerator.writeOutput(html, to: output)
 
-        if skipPuml {
-            print("(PlantUML skipped as requested)")
+        if skipDiagrams {
+            print("(Diagrams skipped as requested)")
         }
     }
 }
