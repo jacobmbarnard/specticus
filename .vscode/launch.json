@@ -1,0 +1,24 @@
+{
+	"configurations": [
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:specticus}",
+			"name": "Debug specticus",
+			"target": "specticus",
+			"configuration": "debug",
+			"preLaunchTask": "swift: Build Debug specticus"
+		},
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:specticus}",
+			"name": "Release specticus",
+			"target": "specticus",
+			"configuration": "release",
+			"preLaunchTask": "swift: Build Release specticus"
+		}
+	]
+}
