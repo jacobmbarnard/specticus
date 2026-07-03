@@ -25,7 +25,8 @@ Key sections include:
 1. Edit `title.yml`
 2. Fill out the numbered `.md` files and add your Mermaid diagrams
 3. Run `specticus build`
-4. (Future) `specticus lint`
+4. Run `specticus lint` to validate structure
+5. (Optional) `specticus ids assign` to add traceability IDs
 
 See the full list of starter templates and SRSGem inspiration in the project README.
 

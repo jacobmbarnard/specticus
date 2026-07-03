@@ -6,7 +6,7 @@ import ArgumentParser
 struct Build: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Build the documentation from Markdown sources into styled HTML.",
-        discussion: "Assembles Markdown sources (single file via --input, or multi-file lex order by default per #3) then renders to HTML. See issues #4, #8, #9 for future enhancements."
+        discussion: "Assembles Markdown sources (single file via --input, or multi-file lex order by default per #3) then renders to HTML. Use `specticus lint` first to validate. See remaining issues for TOC, custom tags, config-driven behavior, etc."
     )
 
     @Option(name: .shortAndLong, help: "Path to a single input Markdown file. If omitted, discovers *.md/*.markdown files in the current directory, sorts lexicographically, skips READMEs and welcome-template.md, and concatenates them.")
