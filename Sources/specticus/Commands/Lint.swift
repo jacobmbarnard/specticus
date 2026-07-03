@@ -45,8 +45,8 @@ struct Lint: ParsableCommand {
         }) ?? []
         let hasNumberedSections = mdFiles.contains { $0.range(of: #"^\d{3}-"#, options: .regularExpression) != nil }
 
-        if hasSpecticusDir || hasTitle || hasNumberedSections {
-            ok("Detected specticus project (or partial project)")
+        if hasSpecticusDir || hasTitle || hasNumberedSections || hasWelcome {
+            ok("Detected specticus project (or partial/legacy project)")
         } else {
             warn("No clear specticus project markers found in this directory.",
                  suggestion: "Run `specticus init` to scaffold a new project, or `cd` into an existing one.")
