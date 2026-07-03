@@ -1,6 +1,6 @@
 # Document Metadata
 
-*Keeps track of changes to this document as well as who contributed to the changes.*
+*Core project metadata: system identification, contributors, stakeholders, and copyright notices.*
 
 ## System
 
@@ -13,12 +13,6 @@
 ## Documentation Creation Date
 
 2026-07-02
-
-## Documentation Revision(s)
-
-| Date       | Document Revision | Revisor(s)     | Details                          |
-|------------|-------------------|----------------|----------------------------------|
-| 2026-07-02 | 1                 | Team           | Initial version from `specticus init` |
 
 ## SRS Contributors
 

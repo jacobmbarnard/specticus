@@ -11,13 +11,14 @@ This is a starter Software Requirements Specification (SRS) project.
 The documentation is assembled from the numbered Markdown files (`00N-*.md`) in lexicographic order (see `specticus build` after #3).
 
 Key sections include:
-- Document metadata and revision history
+- Document metadata
 - System overview, business needs, and technical notes
 - Business and technical constraints, requirements, and specifications
 - Use cases and test plan
 - Diagrams (Mermaid sources in `diagrams/`)
 - Glossary, references
 - Business Decision Records (BDRs/) and Architecture Decision Records (ADRs/)
+- Document revisions appendix
 
 ## Next Steps
 

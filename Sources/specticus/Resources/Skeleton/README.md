@@ -14,7 +14,7 @@ specticus build --input welcome-template.md
 
 ## Contents
 
-- Numbered section Markdown files (00N-*.md) covering metadata, overview, elicitation notes, constraints (business + technical), requirements, specifications, use cases, test plan, diagrams, glossary, references, and BDRs.
+- Numbered section Markdown files (00N-*.md) covering metadata, overview, elicitation notes, constraints (business + technical), requirements, specifications, use cases, test plan, diagrams, glossary, references, BDRs, and document revisions appendix.
 - Architecture Decision Records in `ADRs/`
 - Business Decision Records in `BDRs/`
 - Diagrams in `diagrams/` (Mermaid .mmd files — embed using ```mermaid blocks)

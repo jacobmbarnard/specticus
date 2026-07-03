@@ -48,7 +48,7 @@ struct Init: ParsableCommand {
         print("")
         print("Contents created:")
         print("  • title.yml, welcome-template.md, style.css")
-        print("  • 001-014 numbered section templates (lex order): metadata, overview, notes, constraints (biz+tech), requirements, specs, use cases, test plan, diagrams, glossary, references, BDRs")
+        print("  • 001-015 numbered section templates (lex order): metadata, overview, notes, constraints (biz+tech), requirements, specs, use cases, test plan, diagrams, glossary, references, BDRs, document revisions appendix")
         print("  • ADRs/ and BDRs/ (proposed/accepted/deprecated/superseded) + examples")
         print("  • diagrams/ (multiple starter Mermaid .mmd files)")
         print("  • .specticus/config.yml")
