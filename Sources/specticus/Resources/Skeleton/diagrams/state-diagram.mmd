@@ -1,0 +1,10 @@
+%% Mermaid State Diagram
+
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Processing : user action
+    Processing --> Success : completed
+    Processing --> Error : failure
+    Success --> Idle
+    Error --> Idle : retry
+    Idle --> [*]

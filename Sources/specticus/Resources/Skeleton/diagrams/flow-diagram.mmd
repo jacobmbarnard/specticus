@@ -1,0 +1,9 @@
+%% Mermaid Flow Diagram for {{PROJECT_NAME}}
+
+flowchart TD
+    Start[Start] --> Step1[Action Step 1]
+    Step1 --> Decision{Decision Point?}
+    Decision -->|Yes| Step2[Action Step 2]
+    Decision -->|No| Failure[Failure Handling]
+    Step2 --> End[End]
+    Failure --> End

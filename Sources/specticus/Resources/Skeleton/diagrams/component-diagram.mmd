@@ -1,9 +1,10 @@
-%% Mermaid diagram (component level)
-%% https://mermaid.js.org
+%% Mermaid Component Diagram for {{PROJECT_NAME}}
 
 flowchart LR
-    CLI[CLI<br/>specticus] --> DocGen[Document Generator]
-    DocGen --> Markdown[Markdown Parser<br/>+ Ink]
+    CLI["CLI (specticus)"] --> Core[Core Document Generator]
+    Core --> Parser[Markdown Parser]
+    Core --> Mermaid[Mermaid Diagram Support]
+    Parser --> Output[Styled HTML Output]
 
-    classDef component fill:#e0e7ff,stroke:#4338ca,color:#312e81
-    class CLI,DocGen,Markdown component
+    classDef component fill:#e0e7ff,stroke:#4338ca
+    class CLI,Core,Parser,Mermaid,Output component
