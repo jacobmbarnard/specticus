@@ -4,11 +4,17 @@ import ArgumentParser
 
 // Core generation logic for turning Markdown into styled HTML output.
 // Expanded for #3: multi-file Markdown assembly in lex order.
+// Expanded for #7: config-driven title, stylesheet, and fallback input.
 
 
 struct DocumentGenerator {
-    static func generateHTML(from markdown: String, title: String = "specticus • Documentation") throws -> String {
+    static func generateHTML(
+        from markdown: String,
+        title: String = "specticus • Documentation",
+        stylesheet: String = "style.css"
+    ) throws -> String {
         let bodyHTML = MarkdownParser().html(from: markdown)
+        let escapedTitle = escapeHTML(title)
 
         return """
 <!DOCTYPE html>
@@ -16,8 +22,8 @@ struct DocumentGenerator {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>\(title)</title>
-    <link rel="stylesheet" href="style.css">
+    <title>\(escapedTitle)</title>
+    <link rel="stylesheet" href="\(escapeHTML(stylesheet))">
 </head>
 <body>
     <header class="site-header">
@@ -39,8 +45,12 @@ struct DocumentGenerator {
 
     static func writeOutput(_ html: String, to path: String = "output.html") throws {
         let outputURL = URL(fileURLWithPath: path)
+        let parent = outputURL.deletingLastPathComponent()
+        if parent.path != "" && parent.path != "." {
+            try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+        }
         try html.write(to: outputURL, atomically: true, encoding: .utf8)
-        print("Wrote \(outputURL.lastPathComponent)")
+        print("Wrote \(path)")
     }
 
     /// Assembles Markdown content.
@@ -48,8 +58,14 @@ struct DocumentGenerator {
     /// - If `input` is nil: discovers all *.md / *.markdown files in the directory,
     ///   sorts them lexicographically, skips README* and welcome-template.md,
     ///   and concatenates them. (implements #3)
-    /// Falls back to welcome-template.md for legacy single-file projects when no other .md files are present.
-    static func assembleSources(input: String? = nil, baseDirectory: String = ".") throws -> String {
+    /// - Falls back to `fallbackInput` (from config) when set, then `welcome-template.md`
+    ///   for legacy single-file projects when no other .md files are present.
+    /// Hidden directories (e.g. `.specticus/`) are never treated as content sources.
+    static func assembleSources(
+        input: String? = nil,
+        baseDirectory: String = ".",
+        fallbackInput: String? = nil
+    ) throws -> String {
         let fm = FileManager.default
         let baseURL = URL(fileURLWithPath: baseDirectory)
 
@@ -61,7 +77,7 @@ struct DocumentGenerator {
             return try String(contentsOf: inputURL, encoding: .utf8)
         }
 
-        // Multi-file discovery (lexicographic order)
+        // Multi-file discovery (lexicographic order). skipsHiddenFiles excludes `.specticus/`.
         let contents = try fm.contentsOfDirectory(
             at: baseURL,
             includingPropertiesForKeys: [.isRegularFileKey],
@@ -79,10 +95,13 @@ struct DocumentGenerator {
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
 
         if mdFiles.isEmpty {
-            // Legacy fallback for projects without numbered .md files
-            let legacy = baseURL.appendingPathComponent("welcome-template.md")
-            if fm.fileExists(atPath: legacy.path) {
-                return try String(contentsOf: legacy, encoding: .utf8)
+            // Config-driven fallback, then legacy welcome-template.md
+            let candidates = [fallbackInput, "welcome-template.md"].compactMap { $0 }
+            for name in candidates {
+                let url = baseURL.appendingPathComponent(name)
+                if fm.fileExists(atPath: url.path) {
+                    return try String(contentsOf: url, encoding: .utf8)
+                }
             }
             throw ValidationError("No Markdown files found to assemble (looked for *.md / *.markdown). Specify --input or add content files.")
         }
@@ -90,5 +109,13 @@ struct DocumentGenerator {
         let parts = try mdFiles.map { try String(contentsOf: $0, encoding: .utf8) }
         // Join with blank lines; each file typically starts with its own heading
         return parts.joined(separator: "\n\n")
+    }
+
+    private static func escapeHTML(_ string: String) -> String {
+        string
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
     }
 }

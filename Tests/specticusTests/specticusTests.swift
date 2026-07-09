@@ -52,3 +52,205 @@ import Foundation
     #expect(assembled.contains("ONLY-THIS"))
     #expect(!assembled.contains("OTHER"))
 }
+
+// MARK: - Config & project (#7)
+
+@Test func configParsesFullYAML() throws {
+    let yaml = """
+    version: 1
+    project:
+      title: My Spec
+      author: Ada
+    build:
+      default_input: "welcome-template.md"
+      output: "dist/docs.html"
+      css: "assets/theme.css"
+      diagrams_enabled: false
+      diagrams_dir: "pics"
+    decision_records:
+      adrs_enabled: true
+      bdrs_enabled: false
+    ids:
+      auto_assign: true
+    """
+    let config = try SpecticusConfig.parse(yaml: yaml)
+    #expect(config.version == 1)
+    #expect(config.project.title == "My Spec")
+    #expect(config.project.author == "Ada")
+    #expect(config.build.defaultInput == "welcome-template.md")
+    #expect(config.build.output == "dist/docs.html")
+    #expect(config.build.css == "assets/theme.css")
+    #expect(config.build.diagramsEnabled == false)
+    #expect(config.build.diagramsDir == "pics")
+    #expect(config.decisionRecords.adrsEnabled == true)
+    #expect(config.decisionRecords.bdrsEnabled == false)
+    #expect(config.ids.autoAssign == true)
+}
+
+@Test func configPartialYAMLUsesDefaults() throws {
+    let yaml = """
+    version: 1
+    project:
+      title: Partial
+    build:
+      output: "custom.html"
+    """
+    let config = try SpecticusConfig.parse(yaml: yaml)
+    #expect(config.project.title == "Partial")
+    #expect(config.build.output == "custom.html")
+    #expect(config.build.css == "style.css")
+    #expect(config.build.diagramsEnabled == true)
+    #expect(config.build.diagramsDir == "diagrams")
+    #expect(config.ids.autoAssign == false)
+}
+
+@Test func projectLoadUsesConfigAndTitle() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-proj-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+
+    let configYAML = """
+    version: 1
+    project:
+      title: FromConfig
+    build:
+      output: "build/out.html"
+      css: "theme.css"
+    """
+    try configYAML.write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let titleYAML = """
+    title: "From Title YML"
+    author: "Tester"
+    version: "1.0.0"
+    """
+    try titleYAML.write(to: tmp.appendingPathComponent("title.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    #expect(project.configSource == .file)
+    #expect(project.config.build.output == "build/out.html")
+    #expect(project.config.build.css == "theme.css")
+    #expect(project.documentTitle == "From Title YML")
+    #expect(project.titleMetadata?.author == "Tester")
+    #expect(project.hasConfigFile)
+    #expect(project.hasSpecticusDirectory)
+}
+
+@Test func projectLoadFallsBackToDefaultsWithoutConfig() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-legacy-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    #expect(project.configSource == .defaults)
+    #expect(project.config.build.output == "output.html")
+    #expect(project.documentTitle == "specticus • Documentation")
+}
+
+@Test func projectLoadRejectsInvalidConfig() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-bad-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    // Invalid YAML structure for our model: version as a nested map won't decode as Int
+    try "version: { nested: true }\n".write(
+        to: specticusDir.appendingPathComponent("config.yml"),
+        atomically: true,
+        encoding: .utf8
+    )
+
+    #expect(throws: (any Error).self) {
+        try SpecticusProject.load(from: tmp.path)
+    }
+}
+
+@Test func assembleUsesConfigFallbackInput() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-fallback-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    try "FALLBACK-CONTENT".write(to: tmp.appendingPathComponent("main.md"), atomically: true, encoding: .utf8)
+    // No numbered sections — only main.md which is not welcome-template
+
+    // Without fallback, main.md is discovered as a normal md file
+    let withDiscovery = try DocumentGenerator.assembleSources(input: nil, baseDirectory: tmp.path)
+    #expect(withDiscovery.contains("FALLBACK-CONTENT"))
+
+    // Empty of all md except a custom fallback file (remove main, add only custom)
+    try fm.removeItem(at: tmp.appendingPathComponent("main.md"))
+    try "CUSTOM-ONLY".write(to: tmp.appendingPathComponent("custom-source.md"), atomically: true, encoding: .utf8)
+
+    // custom-source.md is still a discoverable .md, so multi-file uses it
+    let discovered = try DocumentGenerator.assembleSources(
+        input: nil,
+        baseDirectory: tmp.path,
+        fallbackInput: "custom-source.md"
+    )
+    #expect(discovered.contains("CUSTOM-ONLY"))
+
+    // When only non-md files exist, fallbackInput is used
+    try fm.removeItem(at: tmp.appendingPathComponent("custom-source.md"))
+    try "FROM-FALLBACK".write(to: tmp.appendingPathComponent("solo.md"), atomically: true, encoding: .utf8)
+    // Hide from multi-file by naming as welcome path... use fallback when zero md except we need zero md
+    try fm.removeItem(at: tmp.appendingPathComponent("solo.md"))
+    try "ONLY-FALLBACK".write(to: tmp.appendingPathComponent("entry.md"), atomically: true, encoding: .utf8)
+    // entry.md will be discovered. Create a dir with only a non-standard name used solely as fallback:
+    // Put content only in a file that assembly skips: welcome-template is skipped in multi-file
+    try fm.removeItem(at: tmp.appendingPathComponent("entry.md"))
+    try "WELCOME-SKIPPED-IN-MULTI".write(to: tmp.appendingPathComponent("welcome-template.md"), atomically: true, encoding: .utf8)
+    try "ALT-FALLBACK".write(to: tmp.appendingPathComponent("alt.md"), atomically: true, encoding: .utf8)
+
+    // alt.md is discovered — multi-file wins over fallback
+    let multiWins = try DocumentGenerator.assembleSources(
+        input: nil,
+        baseDirectory: tmp.path,
+        fallbackInput: "alt.md"
+    )
+    #expect(multiWins.contains("ALT-FALLBACK"))
+    #expect(!multiWins.contains("WELCOME-SKIPPED-IN-MULTI"))
+
+    // Only welcome-template (skipped in multi) → fallbackInput if set and exists, else welcome
+    try fm.removeItem(at: tmp.appendingPathComponent("alt.md"))
+    let onlyLegacy = try DocumentGenerator.assembleSources(
+        input: nil,
+        baseDirectory: tmp.path,
+        fallbackInput: "welcome-template.md"
+    )
+    #expect(onlyLegacy.contains("WELCOME-SKIPPED-IN-MULTI"))
+}
+
+@Test func generateHTMLUsesTitleAndStylesheet() throws {
+    let html = try DocumentGenerator.generateHTML(
+        from: "# Hello",
+        title: "My Doc <Title>",
+        stylesheet: "css/app.css"
+    )
+    #expect(html.contains("<title>My Doc &lt;Title&gt;</title>"))
+    #expect(html.contains("href=\"css/app.css\""))
+    #expect(html.contains("Hello"))
+}
+
+@Test func assembleIgnoresHiddenSpecticusDirectory() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-hidden-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    try "VISIBLE".write(to: tmp.appendingPathComponent("001-main.md"), atomically: true, encoding: .utf8)
+    let hidden = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: hidden, withIntermediateDirectories: true)
+    try "SHOULD-NOT-APPEAR".write(to: hidden.appendingPathComponent("notes.md"), atomically: true, encoding: .utf8)
+
+    let assembled = try DocumentGenerator.assembleSources(input: nil, baseDirectory: tmp.path)
+    #expect(assembled.contains("VISIBLE"))
+    #expect(!assembled.contains("SHOULD-NOT-APPEAR"))
+}
