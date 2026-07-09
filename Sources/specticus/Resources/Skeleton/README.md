@@ -5,6 +5,7 @@ A specification and documentation project managed with [specticus](https://githu
 ## Quick Start
 
 ```bash
+specticus lint          # validate your project layout first
 specticus build
 # (assembles 00N-*.md files in order)
 
