@@ -7,7 +7,7 @@ A specification and documentation project managed with [specticus](https://githu
 ```bash
 specticus lint          # validate your project layout first
 specticus build
-# (assembles 00N-*.md files in order)
+# → output/index.html plus css/, img/, svg/ assets
 
 # or force a single file:
 specticus build --input welcome-template.md
@@ -19,10 +19,10 @@ specticus build --input welcome-template.md
 - Architecture Decision Records in `ADRs/`
 - Business Decision Records in `BDRs/`
 - Diagrams in `diagrams/` (Mermaid .mmd files — embed using ```mermaid blocks)
-- Project config in `.specticus/config.yml` (output path, CSS, diagrams, ID settings)
+- Project config in `.specticus/config.yml` (output path, CSS, asset copy, diagrams, ID settings)
 - Metadata in `title.yml` (used for the HTML document title)
 
-Edit the Markdown files and config, then run `specticus build` to generate HTML.
+Edit the Markdown files and config, then run `specticus build`. Open `output/index.html` in a browser (CSS and images are copied beside it).
 
 ## Philosophy
 

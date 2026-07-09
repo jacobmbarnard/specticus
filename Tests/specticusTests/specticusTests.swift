@@ -148,7 +148,8 @@ import Foundation
 
     let project = try SpecticusProject.load(from: tmp.path)
     #expect(project.configSource == .defaults)
-    #expect(project.config.build.output == "output.html")
+    #expect(project.config.build.output == "output/index.html")
+    #expect(project.config.build.copyAssets == true)
     #expect(project.documentTitle == "specticus • Documentation")
 }
 
@@ -253,4 +254,136 @@ import Foundation
     let assembled = try DocumentGenerator.assembleSources(input: nil, baseDirectory: tmp.path)
     #expect(assembled.contains("VISIBLE"))
     #expect(!assembled.contains("SHOULD-NOT-APPEAR"))
+}
+
+// MARK: - Structured output & assets (#9)
+
+@Test func resourcePublisherCopiesCSSAndImages() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-assets-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    try "body{color:red}".write(to: tmp.appendingPathComponent("style.css"), atomically: true, encoding: .utf8)
+    try Data([0x89, 0x50, 0x4E, 0x47]).write(to: tmp.appendingPathComponent("logo.png")) // tiny fake PNG header
+    try fm.createDirectory(at: tmp.appendingPathComponent("images"), withIntermediateDirectories: true)
+    try Data([0x47, 0x49, 0x46]).write(to: tmp.appendingPathComponent("images/chart.gif"))
+    try fm.createDirectory(at: tmp.appendingPathComponent("diagrams"), withIntermediateDirectories: true)
+    try "<svg/>".write(to: tmp.appendingPathComponent("diagrams/flow.svg"), atomically: true, encoding: .utf8)
+
+    let result = try ResourcePublisher.publish(
+        projectRoot: tmp,
+        outputHTMLPath: "output/index.html",
+        sourceCSS: "style.css",
+        diagramsDir: "diagrams",
+        copyAssets: true
+    )
+
+    #expect(result.stylesheetHref == "css/style.css")
+    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/css/style.css").path))
+    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/img/logo.png").path))
+    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/img/chart.gif").path))
+    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/svg/flow.svg").path))
+
+    #expect(result.pathRewrites["logo.png"] == "img/logo.png")
+    #expect(result.pathRewrites["images/chart.gif"] == "img/chart.gif" || result.pathRewrites["chart.gif"] == "img/chart.gif")
+    #expect(result.pathRewrites["diagrams/flow.svg"] == "svg/flow.svg" || result.pathRewrites["flow.svg"] == "svg/flow.svg")
+}
+
+@Test func rewriteReferencesUpdatesImgAndHref() {
+    let html = #"""
+    <img src="logo.png" alt="L">
+    <img src='images/chart.gif'>
+    <a href="diagrams/flow.svg">flow</a>
+    <link rel="stylesheet" href="style.css">
+    """#
+    let rewrites = [
+        "logo.png": "img/logo.png",
+        "images/chart.gif": "img/chart.gif",
+        "diagrams/flow.svg": "svg/flow.svg",
+        "style.css": "css/style.css"
+    ]
+    let out = ResourcePublisher.rewriteReferences(in: html, rewrites: rewrites)
+    #expect(out.contains(#"src="img/logo.png""#))
+    #expect(out.contains("src='img/chart.gif'"))
+    #expect(out.contains(#"href="svg/flow.svg""#))
+    #expect(out.contains(#"href="css/style.css""#))
+    #expect(!out.contains(#"src="logo.png""#))
+}
+
+@Test func publishSkipsAssetsWhenDisabled() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-noassets-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    try "body{}".write(to: tmp.appendingPathComponent("style.css"), atomically: true, encoding: .utf8)
+    try Data([0x89]).write(to: tmp.appendingPathComponent("logo.png"))
+
+    let result = try ResourcePublisher.publish(
+        projectRoot: tmp,
+        outputHTMLPath: "output/index.html",
+        sourceCSS: "style.css",
+        diagramsDir: "diagrams",
+        copyAssets: false
+    )
+
+    #expect(result.stylesheetHref == "style.css")
+    #expect(result.copiedDescriptions.isEmpty)
+    #expect(!fm.fileExists(atPath: tmp.appendingPathComponent("output/css/style.css").path))
+}
+
+@Test func cleanableOutputDirectoryForStructuredPath() {
+    let root = URL(fileURLWithPath: "/tmp/proj", isDirectory: true)
+    let dir = ResourcePublisher.cleanableOutputDirectory(outputHTMLPath: "output/index.html", projectRoot: root)
+    #expect(dir?.lastPathComponent == "output")
+
+    let flat = ResourcePublisher.cleanableOutputDirectory(outputHTMLPath: "output.html", projectRoot: root)
+    #expect(flat == nil)
+
+    let dist = ResourcePublisher.cleanableOutputDirectory(outputHTMLPath: "dist/docs.html", projectRoot: root)
+    #expect(dist?.lastPathComponent == "dist")
+}
+
+@Test func configParsesCopyAssets() throws {
+    let yaml = """
+    build:
+      copy_assets: false
+      output: "site/index.html"
+    """
+    let config = try SpecticusConfig.parse(yaml: yaml)
+    #expect(config.build.copyAssets == false)
+    #expect(config.build.output == "site/index.html")
+}
+
+@Test func endToEndBuildTreeHasWorkingCSSLink() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-e2e-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    try "# Hello\n\n![Logo](logo.png)\n".write(to: tmp.appendingPathComponent("001-intro.md"), atomically: true, encoding: .utf8)
+    try "body { font-family: sans-serif; }".write(to: tmp.appendingPathComponent("style.css"), atomically: true, encoding: .utf8)
+    try Data([0x89, 0x50, 0x4E, 0x47]).write(to: tmp.appendingPathComponent("logo.png"))
+
+    let publish = try ResourcePublisher.publish(
+        projectRoot: tmp,
+        outputHTMLPath: "output/index.html",
+        sourceCSS: "style.css",
+        diagramsDir: "diagrams",
+        copyAssets: true
+    )
+    var html = try DocumentGenerator.generateHTML(
+        from: try DocumentGenerator.assembleSources(input: nil, baseDirectory: tmp.path),
+        title: "E2E",
+        stylesheet: publish.stylesheetHref
+    )
+    html = ResourcePublisher.rewriteReferences(in: html, rewrites: publish.pathRewrites)
+    try DocumentGenerator.writeOutput(html, to: tmp.appendingPathComponent("output/index.html").path)
+
+    let written = try String(contentsOf: tmp.appendingPathComponent("output/index.html"), encoding: .utf8)
+    #expect(written.contains(#"href="css/style.css""#))
+    #expect(written.contains(#"src="img/logo.png""#) || written.contains("img/logo.png"))
+    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/css/style.css").path))
+    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/img/logo.png").path))
 }

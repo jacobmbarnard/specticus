@@ -67,13 +67,15 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
     struct BuildSection: Codable, Equatable, Sendable {
         /// Preferred single-file input when multi-file discovery finds nothing (legacy projects).
         var defaultInput: String?
-        /// Default HTML output path relative to the project root.
+        /// Default HTML output path relative to the project root (structured default: `output/index.html`).
         var output: String
-        /// Stylesheet path referenced from the generated HTML (relative to the HTML location).
+        /// Source stylesheet path relative to the project root (copied into `css/` next to the HTML when copy_assets is true).
         var css: String
         var diagramsEnabled: Bool
         /// Directory for diagram sources (Mermaid `.mmd`, future PlantUML, etc.).
         var diagramsDir: String
+        /// When true, copy CSS/images/SVGs into a structured tree beside the HTML and rewrite references (#9).
+        var copyAssets: Bool
 
         enum CodingKeys: String, CodingKey {
             case defaultInput = "default_input"
@@ -81,29 +83,33 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             case css
             case diagramsEnabled = "diagrams_enabled"
             case diagramsDir = "diagrams_dir"
+            case copyAssets = "copy_assets"
         }
 
         init(
             defaultInput: String? = nil,
-            output: String = "output.html",
+            output: String = "output/index.html",
             css: String = "style.css",
             diagramsEnabled: Bool = true,
-            diagramsDir: String = "diagrams"
+            diagramsDir: String = "diagrams",
+            copyAssets: Bool = true
         ) {
             self.defaultInput = defaultInput
             self.output = output
             self.css = css
             self.diagramsEnabled = diagramsEnabled
             self.diagramsDir = diagramsDir
+            self.copyAssets = copyAssets
         }
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             defaultInput = try container.decodeIfPresent(String.self, forKey: .defaultInput)
-            output = try container.decodeIfPresent(String.self, forKey: .output) ?? "output.html"
+            output = try container.decodeIfPresent(String.self, forKey: .output) ?? "output/index.html"
             css = try container.decodeIfPresent(String.self, forKey: .css) ?? "style.css"
             diagramsEnabled = try container.decodeIfPresent(Bool.self, forKey: .diagramsEnabled) ?? true
             diagramsDir = try container.decodeIfPresent(String.self, forKey: .diagramsDir) ?? "diagrams"
+            copyAssets = try container.decodeIfPresent(Bool.self, forKey: .copyAssets) ?? true
         }
     }
 

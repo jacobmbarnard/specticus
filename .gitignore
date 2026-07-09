@@ -10,3 +10,5 @@ DerivedData/
 # Generated documentation output (track .specticus/config.yml and other source config)
 output.html
 output/
+dist/
+build/
