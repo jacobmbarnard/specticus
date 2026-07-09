@@ -19,10 +19,10 @@ specticus build --input welcome-template.md
 - Architecture Decision Records in `ADRs/`
 - Business Decision Records in `BDRs/`
 - Diagrams in `diagrams/` (Mermaid .mmd files — embed using ```mermaid blocks)
-- Project config in `.specticus/config.yml`
-- Metadata in `title.yml`
+- Project config in `.specticus/config.yml` (output path, CSS, diagrams, ID settings)
+- Metadata in `title.yml` (used for the HTML document title)
 
-Edit the Markdown files, then run `specticus build` to generate HTML.
+Edit the Markdown files and config, then run `specticus build` to generate HTML.
 
 ## Philosophy
 

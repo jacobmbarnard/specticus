@@ -1,17 +1,18 @@
 import Foundation
 import ArgumentParser
 
-// MARK: - Lint Command (implements #10)
+// MARK: - Lint Command (implements #10; config validation via #7)
 
 struct Lint: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Validate the project structure, required files, and external tools.",
-        discussion: "Checks for a valid specticus project layout (from `specticus init`), key files, and build readiness. See issue #10."
+        discussion: "Checks for a valid specticus project layout (from `specticus init`), key files, `.specticus/config.yml`, and build readiness. See issues #10 and #7."
     )
 
     func run() throws {
         let fm = FileManager.default
         let cwd = fm.currentDirectoryPath
+        let project = try SpecticusProject.load(from: cwd)
 
         print("🔍 Running specticus lint...\n")
 
@@ -35,13 +36,14 @@ struct Lint: ParsableCommand {
         }
 
         // --- Project detection
-        let hasSpecticusDir = fm.fileExists(atPath: ".specticus")
-        let hasTitle = fm.fileExists(atPath: "title.yml")
-        let hasWelcome = fm.fileExists(atPath: "welcome-template.md")
+        let hasSpecticusDir = project.hasSpecticusDirectory
+        let hasTitle = fm.fileExists(atPath: project.titleURL.path)
+        let hasWelcome = fm.fileExists(atPath: project.resolve("welcome-template.md").path)
         let mdFiles = (try? fm.contentsOfDirectory(atPath: cwd).filter {
             let lower = $0.lowercased()
             return (lower.hasSuffix(".md") || lower.hasSuffix(".markdown")) &&
-                   !lower.hasPrefix("readme")
+                   !lower.hasPrefix("readme") &&
+                   !lower.hasPrefix(".")
         }) ?? []
         let hasNumberedSections = mdFiles.contains { $0.range(of: #"^\d{3}-"#, options: .regularExpression) != nil }
 
@@ -52,11 +54,14 @@ struct Lint: ParsableCommand {
                  suggestion: "Run `specticus init` to scaffold a new project, or `cd` into an existing one.")
         }
 
-        // --- Core config & metadata
+        // --- Core config & metadata (#7)
         if hasSpecticusDir {
             ok(".specticus/ directory present")
-            if fm.fileExists(atPath: ".specticus/config.yml") {
-                ok(".specticus/config.yml present")
+            if project.hasConfigFile {
+                if project.configSource == .file {
+                    ok(".specticus/config.yml present and valid")
+                    ok("Config: output=\(project.config.build.output), css=\(project.config.build.css), diagrams=\(project.config.build.diagramsEnabled)")
+                }
             } else {
                 warn(".specticus/config.yml missing", suggestion: "Re-run init or manually create a config file.")
             }
@@ -65,17 +70,28 @@ struct Lint: ParsableCommand {
                  suggestion: "Run `specticus init` (or `specticus init --force`) to create it.")
         }
 
+        for w in project.warnings {
+            warn(w, suggestion: "Fix title.yml or remove it if unused.")
+        }
+
         if hasTitle {
-            ok("title.yml present")
+            if project.titleMetadata != nil {
+                ok("title.yml present and readable")
+            } else {
+                warn("title.yml present but could not be parsed",
+                     suggestion: "Check YAML syntax (title, author, version, …).")
+            }
         } else {
             fail("title.yml is missing", suggestion: "This provides project title, author, version, etc. Add it or run init.")
         }
 
-        // --- Style & assets
-        if fm.fileExists(atPath: "style.css") {
-            ok("style.css present (for HTML styling)")
+        // --- Style & assets (respect config css path)
+        let cssPath = project.resolve(project.styleSheetPath).path
+        if fm.fileExists(atPath: cssPath) {
+            ok("\(project.styleSheetPath) present (for HTML styling)")
         } else {
-            warn("style.css not found", suggestion: "The default theme is embedded in init; copy or restore it.")
+            warn("\(project.styleSheetPath) not found",
+                 suggestion: "The default theme is embedded in init; copy or restore it, or update build.css in config.")
         }
 
         // --- Markdown content
@@ -92,23 +108,33 @@ struct Lint: ParsableCommand {
             fail("No Markdown content files found", suggestion: "Add at least one .md file or run `specticus init`.")
         }
 
-        // --- Diagrams
-        let diagramsDir = "diagrams"
-        if fm.fileExists(atPath: diagramsDir) {
-            let diagrams = (try? fm.contentsOfDirectory(atPath: diagramsDir).filter { $0.hasSuffix(".mmd") }) ?? []
+        // --- Diagrams (config diagrams_dir)
+        let diagramsDir = project.config.build.diagramsDir
+        let diagramsPath = project.diagramsDirectory.path
+        if fm.fileExists(atPath: diagramsPath) {
+            let diagrams = (try? fm.contentsOfDirectory(atPath: diagramsPath).filter { $0.hasSuffix(".mmd") }) ?? []
             if !diagrams.isEmpty {
-                ok("diagrams/ present with \(diagrams.count) Mermaid file(s)")
+                ok("\(diagramsDir)/ present with \(diagrams.count) Mermaid file(s)")
             } else {
-                warn("diagrams/ exists but contains no .mmd files",
+                warn("\(diagramsDir)/ exists but contains no .mmd files",
                      suggestion: "Add Mermaid diagrams or remove the folder if unused.")
             }
-        } else {
-            warn("diagrams/ directory not found",
+        } else if project.config.build.diagramsEnabled {
+            warn("\(diagramsDir)/ directory not found",
                  suggestion: "Useful for architecture diagrams. Run init to create starter diagrams.")
+        } else {
+            ok("Diagrams disabled in config (build.diagrams_enabled: false)")
         }
 
         // --- Decision records
-        for drType in ["ADRs", "BDRs"] {
+        for (drType, enabled) in [
+            ("ADRs", project.config.decisionRecords.adrsEnabled),
+            ("BDRs", project.config.decisionRecords.bdrsEnabled)
+        ] {
+            if !enabled {
+                ok("\(drType) disabled in config")
+                continue
+            }
             let base = drType
             if fm.fileExists(atPath: base) {
                 let subdirs = ["accepted", "proposed", "deprecated", "superseded"]
@@ -127,7 +153,11 @@ struct Lint: ParsableCommand {
 
         // --- Build readiness (lightweight check)
         do {
-            _ = try DocumentGenerator.assembleSources(input: nil, baseDirectory: cwd)
+            _ = try DocumentGenerator.assembleSources(
+                input: nil,
+                baseDirectory: cwd,
+                fallbackInput: project.config.build.defaultInput
+            )
             ok("Markdown sources assemble successfully (lex order or single file)")
         } catch {
             fail("Markdown sources failed to assemble",
@@ -138,6 +168,7 @@ struct Lint: ParsableCommand {
         print("\n  ℹ️  External tools:")
         print("      • Mermaid diagrams: rendered client-side in the output HTML (no CLI tool required).")
         print("      • For advanced Mermaid CLI rendering you can optionally install @mermaid-js/mermaid-cli.")
+        print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, diagrams, and future ID settings.")
 
         // --- Summary
         print("\n📊 Lint summary:")

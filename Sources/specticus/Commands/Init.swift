@@ -51,14 +51,16 @@ struct Init: ParsableCommand {
         print("  • 001-015 numbered section templates (lex order): metadata, overview, notes, constraints (biz+tech), requirements, specs, use cases, test plan, diagrams, glossary, references, BDRs, document revisions appendix")
         print("  • ADRs/ and BDRs/ (proposed/accepted/deprecated/superseded) + examples")
         print("  • diagrams/ (multiple starter Mermaid .mmd files)")
-        print("  • .specticus/config.yml")
+        print("  • .specticus/config.yml (build output, CSS, diagrams, IDs settings)")
         print("")
         print("Next steps:")
         if targetDir != "." {
             print("  cd \(targetDir)")
         }
+        print("  # Edit title.yml and .specticus/config.yml as needed")
+        print("  specticus lint")
         print("  specticus build")
-        print("  # Edit files, then re-build. See README.md for more.")
+        print("  # Edit section files, then re-build. See README.md for more.")
     }
 
     private func resolveTarget(fm: FileManager) -> (targetDir: String, projectName: String) {
