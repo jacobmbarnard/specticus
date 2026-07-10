@@ -8,6 +8,7 @@ import ArgumentParser
 // Expanded for #8: optional build number + timestamp footer.
 // Expanded for #9: stylesheet href is typically a path under the structured output tree.
 // Expanded for #4: heading auto-numbering applied to Markdown before HTML (see HeadingNumberer).
+// Expanded for #12: hyperlinked TOC + heading anchors (see TableOfContents).
 
 
 struct DocumentGenerator {
@@ -15,9 +16,20 @@ struct DocumentGenerator {
         from markdown: String,
         title: String = "specticus • Documentation",
         stylesheet: String = "style.css",
-        buildInfo: BuildRecord? = nil
+        buildInfo: BuildRecord? = nil,
+        tocMaxLevel: Int = TableOfContents.defaultMaxLevel
     ) throws -> String {
-        let bodyHTML = MarkdownParser().html(from: markdown)
+        let rawBody = MarkdownParser().html(from: markdown)
+        let tocApplied = TableOfContents.apply(
+            markdown: markdown,
+            bodyHTML: rawBody,
+            maxLevel: tocMaxLevel
+        )
+        let bodyHTML = tocApplied.bodyHTML
+        let tocBlock = tocApplied.tocHTML.isEmpty
+            ? ""
+            : "\n            \(tocApplied.tocHTML.replacingOccurrences(of: "\n", with: "\n            "))\n"
+
         let escapedTitle = escapeHTML(title)
 
         let footerHTML: String
@@ -35,6 +47,10 @@ struct DocumentGenerator {
             footerHTML = ""
         }
 
+        let tocNavLink = tocApplied.tocHTML.isEmpty
+            ? "<span class=\"site-nav text-muted\">Documentation</span>"
+            : "<a class=\"site-nav\" href=\"#toc\">Contents</a>"
+
         return """
 <!DOCTYPE html>
 <html lang="en">
@@ -48,12 +64,12 @@ struct DocumentGenerator {
     <header class="site-header">
         <div class="site-header-inner">
             <a href="#" class="site-title">specticus</a>
-            <span class="site-nav text-muted">Documentation</span>
+            \(tocNavLink)
         </div>
     </header>
 
     <main class="main-content">
-        <div class="page-content">
+        <div class="page-content">\(tocBlock)
             \(bodyHTML)
         </div>
     </main>

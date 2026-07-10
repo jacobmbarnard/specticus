@@ -12,6 +12,7 @@ struct Build: ParsableCommand {
         By default assets (CSS, images, SVGs) are copied into a structured tree next to the HTML (#9). \
         Each build can increment a counter in `.specticus/build-number.yml` and stamp the HTML footer (#8). \
         Headings are auto-numbered hierarchically through level 3 by default (#4; config up to 6). \
+        A hyperlinked table of contents is injected by default (#12). \
         Use `specticus lint` first to validate. CLI flags override config values.
         """
     )
@@ -33,6 +34,9 @@ struct Build: ParsableCommand {
 
     @Flag(name: .long, help: "Do not auto-number headings (overrides build.heading_number_max_level)")
     var skipHeadingNumbers: Bool = false
+
+    @Flag(name: .long, help: "Do not generate a table of contents (overrides build.toc)")
+    var skipToc: Bool = false
 
     func run() throws {
         let project = try SpecticusProject.load()
@@ -77,11 +81,17 @@ struct Build: ParsableCommand {
             copyAssets: copyAssets
         )
 
+        let tocMax: Int = {
+            if skipToc || !project.config.build.tocEnabled { return 0 }
+            return project.config.build.tocMaxLevel
+        }()
+
         var html = try DocumentGenerator.generateHTML(
             from: markdown,
             title: project.documentTitle,
             stylesheet: publish.stylesheetHref,
-            buildInfo: buildInfo
+            buildInfo: buildInfo,
+            tocMaxLevel: tocMax
         )
         html = ResourcePublisher.rewriteReferences(in: html, rewrites: publish.pathRewrites)
 

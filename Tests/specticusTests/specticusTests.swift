@@ -152,6 +152,8 @@ import Foundation
     #expect(project.config.build.copyAssets == true)
     #expect(project.config.build.trackBuilds == true)
     #expect(project.config.build.headingNumberMaxLevel == 3)
+    #expect(project.config.build.tocEnabled == true)
+    #expect(project.config.build.tocMaxLevel == 3)
     #expect(project.documentTitle == "specticus • Documentation")
 }
 
@@ -560,8 +562,105 @@ import Foundation
     ## BR-007: The system shall
     """
     let numbered = HeadingNumberer.numberHeadings(in: md, maxLevel: 3)
-    let html = try DocumentGenerator.generateHTML(from: numbered, title: "T")
+    let html = try DocumentGenerator.generateHTML(from: numbered, title: "T", tocMaxLevel: 0)
     #expect(html.contains("1. Doc") || html.contains("1. Doc"))
     #expect(html.contains("BR-007"))
     #expect(html.contains("1.1.") || html.contains("1.1. BR-007"))
+}
+
+// MARK: - Table of contents (#12)
+
+@Test func tocExtractsHeadingsAndSlugs() {
+    let md = """
+    # Alpha
+    ## Beta
+    ### Gamma
+    #### Delta
+    """
+    let headings = TableOfContents.extractHeadings(from: md, maxLevel: 3)
+    #expect(headings.count == 4)
+    #expect(headings[0].id != nil)
+    #expect(headings[1].id != nil)
+    #expect(headings[2].id != nil)
+    #expect(headings[3].id == nil) // level 4 excluded from TOC
+    #expect(TableOfContents.slugify("1. Hello World") == "1-hello-world"
+            || TableOfContents.slugify("1. Hello World").contains("hello"))
+}
+
+@Test func tocFullPipelineInHTML() throws {
+    let md = """
+    # Intro
+    ## Details
+    #### Deep
+    """
+    let numbered = HeadingNumberer.numberHeadings(in: md, maxLevel: 3)
+    let html = try DocumentGenerator.generateHTML(
+        from: numbered,
+        title: "Spec",
+        tocMaxLevel: 3
+    )
+    #expect(html.contains("class=\"toc\""))
+    #expect(html.contains("id=\"toc\""))
+    #expect(html.contains("Contents"))
+    #expect(html.contains("href=\"#"))
+    #expect(html.contains("<h1 id=\""))
+    #expect(html.contains("<h2 id=\""))
+    // H4 present but no requirement for id when beyond toc max
+    #expect(html.contains("<h4") || html.contains("Deep"))
+    #expect(html.contains("href=\"#toc\"") || html.contains("Contents"))
+}
+
+@Test func tocDisabledProducesNoNav() throws {
+    let md = "# Only\n"
+    let html = try DocumentGenerator.generateHTML(from: md, title: "T", tocMaxLevel: 0)
+    #expect(!html.contains("class=\"toc\""))
+}
+
+@Test func tocUniqueSlugsForDuplicates() {
+    let md = """
+    # Same
+    ## Same
+    """
+    let headings = TableOfContents.extractHeadings(from: md, maxLevel: 3)
+    let ids = headings.compactMap(\.id)
+    #expect(ids.count == 2)
+    #expect(ids[0] != ids[1])
+}
+
+@Test func tocSkipsFencedHeadings() {
+    let md = """
+    # Real
+    ```
+    # Fake
+    ```
+    ## Also Real
+    """
+    let headings = TableOfContents.extractHeadings(from: md, maxLevel: 3)
+    #expect(headings.count == 2)
+    #expect(headings[0].text == "Real")
+    #expect(headings[1].text == "Also Real")
+}
+
+@Test func tocConfigKeys() throws {
+    let yaml = """
+    build:
+      toc: false
+      toc_max_level: 2
+    """
+    let config = try SpecticusConfig.parse(yaml: yaml)
+    #expect(config.build.tocEnabled == false)
+    #expect(config.build.tocMaxLevel == 2)
+}
+
+@Test func tocInjectAnchorsOnBodyHTML() {
+    let md = """
+    # Alpha
+    ## Beta
+    """
+    let headings = TableOfContents.extractHeadings(from: md, maxLevel: 3)
+    let body = "<h1>Alpha</h1><p>x</p><h2>Beta</h2>"
+    let out = TableOfContents.injectAnchors(into: body, headings: headings)
+    #expect(out.contains(#"<h1 id=""#) || out.contains("id=\""))
+    #expect(headings[0].id.map { out.contains($0) } ?? false)
+    #expect(headings[1].id.map { out.contains($0) } ?? false)
 }

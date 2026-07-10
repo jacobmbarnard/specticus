@@ -80,6 +80,10 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         var trackBuilds: Bool
         /// Maximum ATX heading level to auto-number (0 = off, default 3, max 6). Disjoint from traceability IDs (#4 / #6).
         var headingNumberMaxLevel: Int
+        /// When true, inject a hyperlinked table of contents (#12).
+        var tocEnabled: Bool
+        /// Maximum heading level included in the TOC (0 = off via disable, default 3, max 6).
+        var tocMaxLevel: Int
 
         enum CodingKeys: String, CodingKey {
             case defaultInput = "default_input"
@@ -90,6 +94,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             case copyAssets = "copy_assets"
             case trackBuilds = "track_builds"
             case headingNumberMaxLevel = "heading_number_max_level"
+            case tocEnabled = "toc"
+            case tocMaxLevel = "toc_max_level"
         }
 
         init(
@@ -100,7 +106,9 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             diagramsDir: String = "diagrams",
             copyAssets: Bool = true,
             trackBuilds: Bool = true,
-            headingNumberMaxLevel: Int = HeadingNumberer.defaultMaxLevel
+            headingNumberMaxLevel: Int = HeadingNumberer.defaultMaxLevel,
+            tocEnabled: Bool = true,
+            tocMaxLevel: Int = TableOfContents.defaultMaxLevel
         ) {
             self.defaultInput = defaultInput
             self.output = output
@@ -110,6 +118,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             self.copyAssets = copyAssets
             self.trackBuilds = trackBuilds
             self.headingNumberMaxLevel = HeadingNumberer.clampMaxLevel(headingNumberMaxLevel)
+            self.tocEnabled = tocEnabled
+            self.tocMaxLevel = TableOfContents.clampMaxLevel(tocMaxLevel)
         }
 
         init(from decoder: Decoder) throws {
@@ -124,6 +134,10 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             let rawMax = try container.decodeIfPresent(Int.self, forKey: .headingNumberMaxLevel)
                 ?? HeadingNumberer.defaultMaxLevel
             headingNumberMaxLevel = HeadingNumberer.clampMaxLevel(rawMax)
+            tocEnabled = try container.decodeIfPresent(Bool.self, forKey: .tocEnabled) ?? true
+            let rawToc = try container.decodeIfPresent(Int.self, forKey: .tocMaxLevel)
+                ?? TableOfContents.defaultMaxLevel
+            tocMaxLevel = TableOfContents.clampMaxLevel(rawToc)
         }
     }
 
