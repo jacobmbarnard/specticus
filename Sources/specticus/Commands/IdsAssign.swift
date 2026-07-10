@@ -11,9 +11,10 @@ struct IdsAssign: ParsableCommand {
     var dryRun: Bool = false
 
     func run() throws {
-        print("specticus ids assign is not yet implemented (issue #6).")
-        if dryRun {
-            print("(would have been a dry-run)")
+        let project = try SpecticusProject.load()
+        for warning in project.warnings {
+            print("⚠️  \(warning)")
         }
+        try IdsManager.assignIDs(project: project, dryRun: dryRun)
     }
 }

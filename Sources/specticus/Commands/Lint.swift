@@ -164,6 +164,40 @@ struct Lint: ParsableCommand {
                  suggestion: "Run with a specific --input or ensure numbered .md files (or welcome-template.md) are present and readable. Error: \(error.localizedDescription)")
         }
 
+        // --- Traceability IDs (#6)
+        do {
+            let headings = try IdsManager.collectHeadings(project: project)
+            var idToHeadings: [String: [IdsManager.HeadingInfo]] = [:]
+            var drifts = 0
+            let store = IdsManager.loadStore(from: project.idsURL)
+
+            for h in headings {
+                if let id = h.id {
+                    idToHeadings[id, default: []].append(h)
+                    if let bound = store.bindings[id], bound != h.content {
+                        drifts += 1
+                    }
+                }
+            }
+
+            let dups = idToHeadings.filter { $0.value.count > 1 }
+            if !dups.isEmpty {
+                fail("Duplicate traceability IDs found: \(dups.keys.sorted().joined(separator: ", "))",
+                     suggestion: "Run `specticus ids assign` to diagnose and resolve.")
+            } else {
+                ok("No duplicate traceability IDs")
+            }
+
+            if drifts > 0 {
+                warn("\(drifts) ID(s) with content drift (text changed but ID kept)",
+                     suggestion: "Run `specticus ids assign` (or fix manually) and re-lint.")
+            } else if !store.bindings.isEmpty {
+                ok("No ID content drift detected (checked \(store.bindings.count) bound ID(s))")
+            }
+        } catch {
+            warn("Could not fully validate traceability IDs: \(error.localizedDescription)")
+        }
+
         // --- External tooling notes (Mermaid is client-rendered)
         print("\n  ℹ️  External tools:")
         print("      • Mermaid diagrams: rendered client-side in the output HTML (no CLI tool required).")
