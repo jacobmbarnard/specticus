@@ -60,7 +60,7 @@ struct Lint: ParsableCommand {
             if project.hasConfigFile {
                 if project.configSource == .file {
                     ok(".specticus/config.yml present and valid")
-                    ok("Config: output=\(project.config.build.output), css=\(project.config.build.css), diagrams=\(project.config.build.diagramsEnabled)")
+                    ok("Config: output=\(project.config.build.output), css=\(project.config.build.css), copy_assets=\(project.config.build.copyAssets), track_builds=\(project.config.build.trackBuilds), diagrams=\(project.config.build.diagramsEnabled)")
                 }
             } else {
                 warn(".specticus/config.yml missing", suggestion: "Re-run init or manually create a config file.")
@@ -168,7 +168,7 @@ struct Lint: ParsableCommand {
         print("\n  ℹ️  External tools:")
         print("      • Mermaid diagrams: rendered client-side in the output HTML (no CLI tool required).")
         print("      • For advanced Mermaid CLI rendering you can optionally install @mermaid-js/mermaid-cli.")
-        print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, diagrams, build tracking (#8), and future ID settings.")
+        print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, asset copy, diagrams, build tracking (#8), and future ID settings.")
         if project.hasSpecticusDirectory {
             if FileManager.default.fileExists(atPath: project.buildNumberURL.path) {
                 if let record = try? BuildTracker.load(from: project.buildNumberURL) {
