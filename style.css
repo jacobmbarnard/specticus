@@ -105,6 +105,21 @@ body {
   color: var(--color-text-muted);
 }
 
+/* Footer — build number + timestamp (#8) */
+.site-footer {
+  border-top: 1px solid var(--color-border);
+  background-color: var(--color-bg-secondary);
+  margin-top: auto;
+}
+
+.site-footer-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px 24px 28px;
+  font-size: 0.8125rem;
+  letter-spacing: 0.01em;
+}
+
 /* Main layout */
 .main-content {
   max-width: 960px;

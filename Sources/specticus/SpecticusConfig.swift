@@ -76,6 +76,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         var diagramsDir: String
         /// When true, copy CSS/images/SVGs into a structured tree beside the HTML and rewrite references (#9).
         var copyAssets: Bool
+        /// When true, increment `.specticus/build-number.yml` on each build and stamp the HTML footer (#8).
+        var trackBuilds: Bool
 
         enum CodingKeys: String, CodingKey {
             case defaultInput = "default_input"
@@ -84,6 +86,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             case diagramsEnabled = "diagrams_enabled"
             case diagramsDir = "diagrams_dir"
             case copyAssets = "copy_assets"
+            case trackBuilds = "track_builds"
         }
 
         init(
@@ -92,7 +95,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             css: String = "style.css",
             diagramsEnabled: Bool = true,
             diagramsDir: String = "diagrams",
-            copyAssets: Bool = true
+            copyAssets: Bool = true,
+            trackBuilds: Bool = true
         ) {
             self.defaultInput = defaultInput
             self.output = output
@@ -100,6 +104,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             self.diagramsEnabled = diagramsEnabled
             self.diagramsDir = diagramsDir
             self.copyAssets = copyAssets
+            self.trackBuilds = trackBuilds
         }
 
         init(from decoder: Decoder) throws {
@@ -110,6 +115,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             diagramsEnabled = try container.decodeIfPresent(Bool.self, forKey: .diagramsEnabled) ?? true
             diagramsDir = try container.decodeIfPresent(String.self, forKey: .diagramsDir) ?? "diagrams"
             copyAssets = try container.decodeIfPresent(Bool.self, forKey: .copyAssets) ?? true
+            trackBuilds = try container.decodeIfPresent(Bool.self, forKey: .trackBuilds) ?? true
         }
     }
 

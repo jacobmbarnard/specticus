@@ -8,7 +8,7 @@ struct Clean: ParsableCommand {
         abstract: "Remove generated output files and directories.",
         discussion: """
         Removes the configured HTML output and its structured asset tree (css/, img/, svg/) when present. \
-        See `.specticus/config.yml` build.output and issue #9.
+        Does not reset `.specticus/build-number.yml` (#8). See `.specticus/config.yml` build.output and issue #9.
         """
     )
 

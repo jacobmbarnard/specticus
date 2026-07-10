@@ -10,6 +10,7 @@ struct Build: ParsableCommand {
         Assembles Markdown sources (single file via --input, or multi-file lex order by default per #3) \
         then renders to HTML. Project settings load from `.specticus/config.yml` when present (#7). \
         By default assets (CSS, images, SVGs) are copied into a structured tree next to the HTML (#9). \
+        Each build can increment a counter in `.specticus/build-number.yml` and stamp the HTML footer (#8). \
         Use `specticus lint` first to validate. CLI flags override config values.
         """
     )
@@ -25,6 +26,9 @@ struct Build: ParsableCommand {
 
     @Flag(name: .long, help: "Do not copy CSS/images/SVGs into the output tree (overrides build.copy_assets)")
     var skipAssets: Bool = false
+
+    @Flag(name: .long, help: "Do not increment build number or stamp the document footer (overrides build.track_builds)")
+    var skipBuildTracking: Bool = false
 
     func run() throws {
         let project = try SpecticusProject.load()
@@ -43,6 +47,15 @@ struct Build: ParsableCommand {
             fallbackInput: project.config.build.defaultInput
         )
 
+        var buildInfo: BuildRecord?
+        let trackingOn = project.config.build.trackBuilds && !skipBuildTracking
+        if trackingOn {
+            buildInfo = try BuildTracker.incrementAndSave(at: project.buildNumberURL)
+            if let buildInfo {
+                print("🔢 \(buildInfo.displayLine)")
+            }
+        }
+
         let outputPath = output ?? project.defaultOutputPath
         let copyAssets = project.config.build.copyAssets && !skipAssets
 
@@ -57,7 +70,8 @@ struct Build: ParsableCommand {
         var html = try DocumentGenerator.generateHTML(
             from: markdown,
             title: project.documentTitle,
-            stylesheet: publish.stylesheetHref
+            stylesheet: publish.stylesheetHref,
+            buildInfo: buildInfo
         )
         html = ResourcePublisher.rewriteReferences(in: html, rewrites: publish.pathRewrites)
 
