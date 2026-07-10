@@ -21,6 +21,9 @@ build:
   # Mermaid diagrams can be embedded in Markdown or kept under diagrams_dir
   # Increment .specticus/build-number.yml and stamp the HTML footer on each build (#8)
   track_builds: true
+  # Hierarchical section numbers through this ATX heading level (default 3, max 6; 0 = off).
+  # Independent of traceability IDs (BR-*, TS-*, …) — see issues #4 and #6.
+  heading_number_max_level: 3
 
 decision_records:
   adrs_enabled: true

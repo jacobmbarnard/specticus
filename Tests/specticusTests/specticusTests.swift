@@ -151,6 +151,7 @@ import Foundation
     #expect(project.config.build.output == "output/index.html")
     #expect(project.config.build.copyAssets == true)
     #expect(project.config.build.trackBuilds == true)
+    #expect(project.config.build.headingNumberMaxLevel == 3)
     #expect(project.documentTitle == "specticus • Documentation")
 }
 
@@ -450,4 +451,117 @@ import Foundation
     #expect(written.contains("build 1"))
     #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/css/style.css").path))
     #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/img/logo.png").path))
+}
+
+// MARK: - Heading auto-numbering (#4)
+
+@Test func headingNumbererDefaultsToLevel3() {
+    let md = """
+    # Alpha
+    ## Beta
+    ### Gamma
+    #### Delta
+    ## Epsilon
+    """
+    let out = HeadingNumberer.numberHeadings(in: md, maxLevel: 3)
+    #expect(out.contains("# 1. Alpha"))
+    #expect(out.contains("## 1.1. Beta"))
+    #expect(out.contains("### 1.1.1. Gamma"))
+    #expect(out.contains("#### Delta")) // level 4 not numbered
+    #expect(!out.contains("#### 1."))
+    #expect(out.contains("## 1.2. Epsilon"))
+}
+
+@Test func headingNumbererCanNumberThroughLevel6() {
+    let md = """
+    # A
+    ## B
+    ### C
+    #### D
+    ##### E
+    ###### F
+    """
+    let out = HeadingNumberer.numberHeadings(in: md, maxLevel: 6)
+    #expect(out.contains("# 1. A"))
+    #expect(out.contains("## 1.1. B"))
+    #expect(out.contains("### 1.1.1. C"))
+    #expect(out.contains("#### 1.1.1.1. D"))
+    #expect(out.contains("##### 1.1.1.1.1. E"))
+    #expect(out.contains("###### 1.1.1.1.1.1. F"))
+}
+
+@Test func headingNumbererZeroDisables() {
+    let md = "# Only\n## Two\n"
+    let out = HeadingNumberer.numberHeadings(in: md, maxLevel: 0)
+    #expect(out == md)
+}
+
+@Test func headingNumbererPreservesTraceabilityIDs() {
+    // Outline numbers are presentation-only; BR-/TS- IDs must remain intact (#4 disjoint from #6).
+    let md = """
+    # Requirements
+    ## BR-001: User Login
+    ## BR-002: View Dashboard
+    ### TS-010: Login Screen
+    """
+    let out = HeadingNumberer.numberHeadings(in: md, maxLevel: 3)
+    #expect(out.contains("# 1. Requirements"))
+    #expect(out.contains("## 1.1. BR-001: User Login"))
+    #expect(out.contains("## 1.2. BR-002: View Dashboard"))
+    #expect(out.contains("### 1.2.1. TS-010: Login Screen"))
+    #expect(out.contains("BR-001"))
+    #expect(out.contains("BR-002"))
+    #expect(out.contains("TS-010"))
+    // Must not invent/replace IDs as section counters
+    #expect(!out.contains("BR-1."))
+}
+
+@Test func headingNumbererSkipsFencedCode() {
+    let md = """
+    # Intro
+    ```
+    # not a heading
+    ## also not
+    ```
+    ## Real
+    """
+    let out = HeadingNumberer.numberHeadings(in: md, maxLevel: 3)
+    #expect(out.contains("# 1. Intro"))
+    #expect(out.contains("# not a heading"))
+    #expect(out.contains("## also not"))
+    #expect(out.contains("## 1.1. Real"))
+}
+
+@Test func headingNumbererIsIdempotentOnOutlinePrefix() {
+    let once = HeadingNumberer.numberHeadings(in: "# Title\n## Sub\n", maxLevel: 3)
+    let twice = HeadingNumberer.numberHeadings(in: once, maxLevel: 3)
+    #expect(once == twice)
+    #expect(twice.contains("# 1. Title"))
+    #expect(twice.contains("## 1.1. Sub"))
+    #expect(!twice.contains("1. 1. Title"))
+}
+
+@Test func headingNumbererClampAndConfig() throws {
+    #expect(HeadingNumberer.clampMaxLevel(-1) == 0)
+    #expect(HeadingNumberer.clampMaxLevel(99) == 6)
+    #expect(HeadingNumberer.clampMaxLevel(3) == 3)
+
+    let yaml = """
+    build:
+      heading_number_max_level: 5
+    """
+    let config = try SpecticusConfig.parse(yaml: yaml)
+    #expect(config.build.headingNumberMaxLevel == 5)
+}
+
+@Test func numberedMarkdownRendersInHTML() throws {
+    let md = """
+    # Doc
+    ## BR-007: The system shall
+    """
+    let numbered = HeadingNumberer.numberHeadings(in: md, maxLevel: 3)
+    let html = try DocumentGenerator.generateHTML(from: numbered, title: "T")
+    #expect(html.contains("1. Doc") || html.contains("1. Doc"))
+    #expect(html.contains("BR-007"))
+    #expect(html.contains("1.1.") || html.contains("1.1. BR-007"))
 }

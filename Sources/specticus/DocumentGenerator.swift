@@ -7,6 +7,7 @@ import ArgumentParser
 // Expanded for #7: config-driven title, stylesheet, and fallback input.
 // Expanded for #8: optional build number + timestamp footer.
 // Expanded for #9: stylesheet href is typically a path under the structured output tree.
+// Expanded for #4: heading auto-numbering applied to Markdown before HTML (see HeadingNumberer).
 
 
 struct DocumentGenerator {

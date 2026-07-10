@@ -11,6 +11,7 @@ struct Build: ParsableCommand {
         then renders to HTML. Project settings load from `.specticus/config.yml` when present (#7). \
         By default assets (CSS, images, SVGs) are copied into a structured tree next to the HTML (#9). \
         Each build can increment a counter in `.specticus/build-number.yml` and stamp the HTML footer (#8). \
+        Headings are auto-numbered hierarchically through level 3 by default (#4; config up to 6). \
         Use `specticus lint` first to validate. CLI flags override config values.
         """
     )
@@ -30,6 +31,9 @@ struct Build: ParsableCommand {
     @Flag(name: .long, help: "Do not increment build number or stamp the document footer (overrides build.track_builds)")
     var skipBuildTracking: Bool = false
 
+    @Flag(name: .long, help: "Do not auto-number headings (overrides build.heading_number_max_level)")
+    var skipHeadingNumbers: Bool = false
+
     func run() throws {
         let project = try SpecticusProject.load()
 
@@ -41,11 +45,17 @@ struct Build: ParsableCommand {
             print("ℹ️  No .specticus/config.yml found — using built-in defaults. Run `specticus init` for a full project.")
         }
 
-        let markdown = try DocumentGenerator.assembleSources(
+        var markdown = try DocumentGenerator.assembleSources(
             input: input,
             baseDirectory: project.root.path,
             fallbackInput: project.config.build.defaultInput
         )
+
+        // Hierarchical section numbers (#4) — independent of traceability IDs (#6).
+        let headingMax = skipHeadingNumbers ? 0 : project.config.build.headingNumberMaxLevel
+        if headingMax > 0 {
+            markdown = HeadingNumberer.numberHeadings(in: markdown, maxLevel: headingMax)
+        }
 
         var buildInfo: BuildRecord?
         let trackingOn = project.config.build.trackBuilds && !skipBuildTracking
