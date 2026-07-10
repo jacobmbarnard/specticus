@@ -5,6 +5,7 @@ import ArgumentParser
 // Core generation logic for turning Markdown into styled HTML output.
 // Expanded for #3: multi-file Markdown assembly in lex order.
 // Expanded for #7: config-driven title, stylesheet, and fallback input.
+// Expanded for #9: stylesheet href is typically a path under the structured output tree.
 
 
 struct DocumentGenerator {
