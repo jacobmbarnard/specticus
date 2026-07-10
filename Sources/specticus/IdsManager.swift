@@ -7,7 +7,7 @@ import Foundation
 // Disjoint from heading numbering (#4).
 
 enum IdsManager {
-    static let knownPrefixes: [String] = ["BR", "TS", "UC", "ADR", "BDR", "TC", "BC", "REF", "DIAG"]
+    static let knownPrefixes: [String] = ["BR", "TS", "UC", "ADR", "BDR", "TC", "BC", "REF", "DIAG", "REV"]
 
     struct IdStore: Codable, Equatable, Sendable {
         var version: Int = 1
@@ -173,9 +173,14 @@ enum IdsManager {
 
         // Assign new IDs
         var newlyAssigned: [(info: HeadingInfo, newID: String)] = []
+        var skippedCount = 0
+        var skippedExamples: [String] = []
         for h in headingsNeedingID {
             guard let prefix = inferPrefix(from: h.content) ?? inferPrefix(from: h.file.lastPathComponent) else {
-                print("ℹ️  Skipped (no prefix inferred): \(h.content) [\(h.file.lastPathComponent)]")
+                skippedCount += 1
+                if skippedExamples.count < 3 {
+                    skippedExamples.append("\(h.content) [\(h.file.lastPathComponent)]")
+                }
                 continue
             }
             let next = (store.counters[prefix] ?? 0) + 1
@@ -183,6 +188,16 @@ enum IdsManager {
             store.counters[prefix] = next
             store.bindings[newID] = h.content
             newlyAssigned.append((h, newID))
+        }
+
+        if skippedCount > 0 {
+            print("ℹ️  Skipped \(skippedCount) heading(s) (no prefix inferred — these are likely structural/document sections rather than traceable items like requirements, constraints or diagrams).")
+            for ex in skippedExamples {
+                print("    e.g. \(ex)")
+            }
+            if skippedCount > skippedExamples.count {
+                print("    ... and \(skippedCount - skippedExamples.count) more")
+            }
         }
 
         if dryRun {
@@ -273,6 +288,22 @@ enum IdsManager {
 
     private static func inferPrefix(from text: String) -> String? {
         let lower = text.lowercased()
+
+        // Filename hints
+        if lower.contains("business-constraint") || lower.contains("business constraint") {
+            return "BC"
+        }
+        if lower.contains("technical-constraint") || lower.contains("technical constraint") {
+            return "TC"
+        }
+        if lower.contains("diagram") {
+            return "DIAG"
+        }
+        if lower.contains("revision") {
+            return "REV"
+        }
+
+        // Content based
         if lower.contains("business requirement") || lower.contains("requirement") || lower.contains("shall ") {
             return "BR"
         }
@@ -282,14 +313,26 @@ enum IdsManager {
         if lower.contains("use case") {
             return "UC"
         }
-        if lower.contains("test case") || lower.contains("test ") {
+        if lower.contains("test case") || lower.contains("test plan") {
             return "TC"
         }
-        if lower.contains("architecture decision") || lower.contains("adr") {
+        if lower.contains("business constraint") || lower.contains("constraint") {
+            return "BC"
+        }
+        if lower.contains("technical constraint") {
+            return "TC"
+        }
+        if lower.contains("architecture decision") || lower.contains("adr") || lower.contains("decision") {
             return "ADR"
         }
         if lower.contains("business decision") || lower.contains("bdr") {
             return "BDR"
+        }
+        if lower.contains("diagram") {
+            return "DIAG"
+        }
+        if lower.contains("revision") {
+            return "REV"
         }
         return nil
     }
