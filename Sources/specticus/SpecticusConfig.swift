@@ -78,6 +78,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         var copyAssets: Bool
         /// When true, increment `.specticus/build-number.yml` on each build and stamp the HTML footer (#8).
         var trackBuilds: Bool
+        /// Maximum ATX heading level to auto-number (0 = off, default 3, max 6). Disjoint from traceability IDs (#4 / #6).
+        var headingNumberMaxLevel: Int
 
         enum CodingKeys: String, CodingKey {
             case defaultInput = "default_input"
@@ -87,6 +89,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             case diagramsDir = "diagrams_dir"
             case copyAssets = "copy_assets"
             case trackBuilds = "track_builds"
+            case headingNumberMaxLevel = "heading_number_max_level"
         }
 
         init(
@@ -96,7 +99,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             diagramsEnabled: Bool = true,
             diagramsDir: String = "diagrams",
             copyAssets: Bool = true,
-            trackBuilds: Bool = true
+            trackBuilds: Bool = true,
+            headingNumberMaxLevel: Int = HeadingNumberer.defaultMaxLevel
         ) {
             self.defaultInput = defaultInput
             self.output = output
@@ -105,6 +109,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             self.diagramsDir = diagramsDir
             self.copyAssets = copyAssets
             self.trackBuilds = trackBuilds
+            self.headingNumberMaxLevel = HeadingNumberer.clampMaxLevel(headingNumberMaxLevel)
         }
 
         init(from decoder: Decoder) throws {
@@ -116,6 +121,9 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             diagramsDir = try container.decodeIfPresent(String.self, forKey: .diagramsDir) ?? "diagrams"
             copyAssets = try container.decodeIfPresent(Bool.self, forKey: .copyAssets) ?? true
             trackBuilds = try container.decodeIfPresent(Bool.self, forKey: .trackBuilds) ?? true
+            let rawMax = try container.decodeIfPresent(Int.self, forKey: .headingNumberMaxLevel)
+                ?? HeadingNumberer.defaultMaxLevel
+            headingNumberMaxLevel = HeadingNumberer.clampMaxLevel(rawMax)
         }
     }
 
