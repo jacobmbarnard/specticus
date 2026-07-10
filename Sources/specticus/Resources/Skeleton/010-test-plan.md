@@ -9,7 +9,7 @@
 
 ## Test Cases
 
-### TC-001: Successful Login
+### TC1: Successful Login
 
 **Steps**
 
@@ -21,6 +21,6 @@
 
 Dashboard is displayed.
 
-### TC-002: ...
+### TC2: ...
 
 <!-- Expand with more test cases, priorities, environments, etc. -->

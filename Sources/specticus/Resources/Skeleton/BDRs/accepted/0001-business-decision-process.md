@@ -1,4 +1,4 @@
-# BDR-0001. Use Business Decision Records
+# BDR1. Use Business Decision Records
 
 **Status:** Accepted  
 **Date:** 2026-07-02  

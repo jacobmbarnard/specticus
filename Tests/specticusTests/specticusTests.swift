@@ -499,23 +499,23 @@ import Foundation
 }
 
 @Test func headingNumbererPreservesTraceabilityIDs() {
-    // Outline numbers are presentation-only; BR-/TS- IDs must remain intact (#4 disjoint from #6).
+    // Outline numbers are presentation-only; BRx/TSx IDs must remain intact (#4 disjoint from #6).
     let md = """
     # Requirements
-    ## BR-001: User Login
-    ## BR-002: View Dashboard
-    ### TS-010: Login Screen
+    ## BR1: User Login
+    ## BR2: View Dashboard
+    ### TS10: Login Screen
     """
     let out = HeadingNumberer.numberHeadings(in: md, maxLevel: 3)
     #expect(out.contains("# 1. Requirements"))
-    #expect(out.contains("## 1.1. BR-001: User Login"))
-    #expect(out.contains("## 1.2. BR-002: View Dashboard"))
-    #expect(out.contains("### 1.2.1. TS-010: Login Screen"))
-    #expect(out.contains("BR-001"))
-    #expect(out.contains("BR-002"))
-    #expect(out.contains("TS-010"))
+    #expect(out.contains("## 1.1. BR1: User Login"))
+    #expect(out.contains("## 1.2. BR2: View Dashboard"))
+    #expect(out.contains("### 1.2.1. TS10: Login Screen"))
+    #expect(out.contains("BR1"))
+    #expect(out.contains("BR2"))
+    #expect(out.contains("TS10"))
     // Must not invent/replace IDs as section counters
-    #expect(!out.contains("BR-1."))
+    #expect(!out.contains("BR1."))
 }
 
 @Test func headingNumbererSkipsFencedCode() {
@@ -559,13 +559,13 @@ import Foundation
 @Test func numberedMarkdownRendersInHTML() throws {
     let md = """
     # Doc
-    ## BR-007: The system shall
+    ## BR7: The system shall
     """
     let numbered = HeadingNumberer.numberHeadings(in: md, maxLevel: 3)
     let html = try DocumentGenerator.generateHTML(from: numbered, title: "T", tocMaxLevel: 0)
     #expect(html.contains("1. Doc") || html.contains("1. Doc"))
-    #expect(html.contains("BR-007"))
-    #expect(html.contains("1.1.") || html.contains("1.1. BR-007"))
+    #expect(html.contains("BR7"))
+    #expect(html.contains("1.1.") || html.contains("1.1. BR7"))
 }
 
 // MARK: - Table of contents (#12)

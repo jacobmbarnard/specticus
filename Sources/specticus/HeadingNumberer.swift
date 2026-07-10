@@ -7,7 +7,7 @@ import Foundation
 /// - Default `maxLevel` is **3** (number `#` … `###` only).
 /// - Configurable **1…6**; `0` disables numbering.
 /// - **Disjoint from traceability IDs (#6):** does not parse, rewrite, or remove
-///   tokens like `BR-001`, `TS-002`, `ADR-0001` in heading text — only prefixes
+///   tokens like `BR1`, `TS2`, `ADR3` in heading text — only prefixes
 ///   an outline number (`1.2.3. `) before the existing title.
 enum HeadingNumberer {
     /// Minimum allowed max level (0 = off).
@@ -115,7 +115,7 @@ enum HeadingNumberer {
         guard level <= maxLevel else { return nil }
 
         // Strip a previous outline prefix we may have added (idempotent re-runs on already-numbered source).
-        // Only strip pure hierarchical prefixes like "1. ", "1.2.3. " — never touch BR-001 style IDs.
+        // Only strip pure hierarchical prefixes like "1. ", "1.2.3. " — never touch BR1 style IDs.
         title = stripOutlinePrefix(from: title)
 
         counters[level] += 1
@@ -132,7 +132,7 @@ enum HeadingNumberer {
     }
 
     /// Removes a leading hierarchical outline number if present (`1. ` / `1.2.3. `).
-    /// Leaves traceability IDs (`BR-001: …`) and normal titles untouched.
+    /// Leaves traceability IDs (`BR1: …`) and normal titles untouched.
     static func stripOutlinePrefix(from title: String) -> String {
         // One or more digit groups separated by dots, each group followed by a dot and space
         // e.g. "1. ", "1.2. ", "12.3.4. "

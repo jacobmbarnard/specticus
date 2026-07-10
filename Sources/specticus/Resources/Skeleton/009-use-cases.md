@@ -2,7 +2,7 @@
 
 *Use cases describe interactions between actors and the system to achieve goals.*
 
-## UC-001: User Authentication
+## UC1: User Authentication
 
 **Description**
 

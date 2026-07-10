@@ -117,7 +117,7 @@ struct Build: ParsableCommand {
         }
 
         if project.config.ids.autoAssign {
-            print("ℹ️  ids.auto_assign is enabled in config (auto-assign on build lands with issue #6).")
+            print("ℹ️  ids.auto_assign is enabled in config (auto-assign on build will be implemented with #6). IDs are BR1/TS2 style.")
         }
     }
 

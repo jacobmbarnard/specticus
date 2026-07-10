@@ -78,7 +78,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         var copyAssets: Bool
         /// When true, increment `.specticus/build-number.yml` on each build and stamp the HTML footer (#8).
         var trackBuilds: Bool
-        /// Maximum ATX heading level to auto-number (0 = off, default 3, max 6). Disjoint from traceability IDs (#4 / #6).
+        /// Maximum ATX heading level to auto-number (0 = off, default 3, max 6). Disjoint from traceability IDs (BR1, TS2, etc.) (#4 / #6).
         var headingNumberMaxLevel: Int
         /// When true, inject a hyperlinked table of contents (#12).
         var tocEnabled: Bool
@@ -163,6 +163,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
     }
 
     struct IdsSection: Codable, Equatable, Sendable {
+        /// When true, `ids assign` auto-assign behavior on build will run (see #6). IDs are simple BR1/TS2/ADR3 (no dash/padding).
         var autoAssign: Bool
 
         enum CodingKeys: String, CodingKey {
