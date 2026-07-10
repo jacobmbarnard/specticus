@@ -21,6 +21,6 @@ See the example in `BDRs/accepted/0001-business-decision-process.md`.
 
 ## Example BDRs
 
-- BDR-0001: Use Business Decision Records
+- BDR1: Use Business Decision Records
 
 <!-- Link or include summaries of accepted BDRs here as the project evolves. -->

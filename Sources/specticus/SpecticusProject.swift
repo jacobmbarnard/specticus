@@ -26,7 +26,7 @@ struct SpecticusProject: Sendable {
     static let hiddenDirectoryName = ".specticus"
     static let configFileName = "config.yml"
     static let titleFileName = "title.yml"
-    static let idsFileName = "ids.json"
+    static let idsFileName = "ids.json"  // stores BR1, TS2, ADR3 etc. (simple prefix+integer)
     static let buildNumberFileName = "build-number.yml"
 
     var specticusDirectory: URL {

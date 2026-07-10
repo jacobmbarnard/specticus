@@ -2,13 +2,13 @@
 
 *Technical specifications instruct at a technical level the specific actions, functionality, appearance, etc. that the system should afford.*
 
-## TS-001: Login Screen Appearance
+## TS1: Login Screen Appearance
 
 The login screen shall have a dark background with hex color value of `#1a1a1a`.
 
 The primary action button shall use the brand teal accent color `#0d9488`.
 
-## TS-002: Login Help Dialog
+## TS2: Login Help Dialog
 
 Upon clicking the help button on the login screen, a dialog with the following attributes shall appear:
 

@@ -117,7 +117,12 @@ struct Build: ParsableCommand {
         }
 
         if project.config.ids.autoAssign {
-            print("ℹ️  ids.auto_assign is enabled in config (auto-assign on build lands with issue #6).")
+            print("ℹ️  ids.auto_assign enabled — running `ids assign` automatically (see #6).")
+            do {
+                try IdsManager.assignIDs(project: project, dryRun: false)
+            } catch {
+                print("⚠️  Auto-assign encountered an issue: \(error.localizedDescription)")
+            }
         }
     }
 

@@ -33,5 +33,7 @@ decision_records:
   bdrs_enabled: true
 
 ids:
-  # When true, future builds may auto-assign missing traceability IDs (#6)
+  # When true, specticus ids assign may be invoked automatically on build (#6).
+  # IDs use simple form BR1 / TS2 / ADR3 (no dash, no zero-padding). Must be unique.
+  # Drift detection and warnings apply in ids assign, lint, and build.
   auto_assign: false
