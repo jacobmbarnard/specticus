@@ -5,16 +5,33 @@ import ArgumentParser
 // Core generation logic for turning Markdown into styled HTML output.
 // Expanded for #3: multi-file Markdown assembly in lex order.
 // Expanded for #7: config-driven title, stylesheet, and fallback input.
+// Expanded for #8: optional build number + timestamp footer.
 
 
 struct DocumentGenerator {
     static func generateHTML(
         from markdown: String,
         title: String = "specticus • Documentation",
-        stylesheet: String = "style.css"
+        stylesheet: String = "style.css",
+        buildInfo: BuildRecord? = nil
     ) throws -> String {
         let bodyHTML = MarkdownParser().html(from: markdown)
         let escapedTitle = escapeHTML(title)
+
+        let footerHTML: String
+        if let buildInfo {
+            let line = escapeHTML(buildInfo.displayLine)
+            footerHTML = """
+
+    <footer class="site-footer">
+        <div class="site-footer-inner text-muted">
+            \(line)
+        </div>
+    </footer>
+"""
+        } else {
+            footerHTML = ""
+        }
 
         return """
 <!DOCTYPE html>
@@ -38,6 +55,7 @@ struct DocumentGenerator {
             \(bodyHTML)
         </div>
     </main>
+\(footerHTML)
 </body>
 </html>
 """

@@ -168,7 +168,14 @@ struct Lint: ParsableCommand {
         print("\n  ℹ️  External tools:")
         print("      • Mermaid diagrams: rendered client-side in the output HTML (no CLI tool required).")
         print("      • For advanced Mermaid CLI rendering you can optionally install @mermaid-js/mermaid-cli.")
-        print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, diagrams, and future ID settings.")
+        print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, diagrams, build tracking (#8), and future ID settings.")
+        if project.hasSpecticusDirectory {
+            if FileManager.default.fileExists(atPath: project.buildNumberURL.path) {
+                if let record = try? BuildTracker.load(from: project.buildNumberURL) {
+                    print("  ℹ️  Last recorded build: #\(record.number) at \(record.lastBuilt)")
+                }
+            }
+        }
 
         // --- Summary
         print("\n📊 Lint summary:")

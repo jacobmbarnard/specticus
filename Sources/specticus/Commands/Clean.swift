@@ -6,7 +6,7 @@ import ArgumentParser
 struct Clean: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Remove generated output files and directories.",
-        discussion: "Removes the configured HTML output (from `.specticus/config.yml` when present). Structured output/ cleanup lands with issue #9."
+        discussion: "Removes the configured HTML output (from `.specticus/config.yml` when present). Does not reset `.specticus/build-number.yml` (#8). Structured output/ cleanup lands with issue #9."
     )
 
     func run() throws {

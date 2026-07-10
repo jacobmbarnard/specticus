@@ -74,6 +74,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         var diagramsEnabled: Bool
         /// Directory for diagram sources (Mermaid `.mmd`, future PlantUML, etc.).
         var diagramsDir: String
+        /// When true, increment `.specticus/build-number.yml` on each build and stamp the HTML footer (#8).
+        var trackBuilds: Bool
 
         enum CodingKeys: String, CodingKey {
             case defaultInput = "default_input"
@@ -81,6 +83,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             case css
             case diagramsEnabled = "diagrams_enabled"
             case diagramsDir = "diagrams_dir"
+            case trackBuilds = "track_builds"
         }
 
         init(
@@ -88,13 +91,15 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             output: String = "output.html",
             css: String = "style.css",
             diagramsEnabled: Bool = true,
-            diagramsDir: String = "diagrams"
+            diagramsDir: String = "diagrams",
+            trackBuilds: Bool = true
         ) {
             self.defaultInput = defaultInput
             self.output = output
             self.css = css
             self.diagramsEnabled = diagramsEnabled
             self.diagramsDir = diagramsDir
+            self.trackBuilds = trackBuilds
         }
 
         init(from decoder: Decoder) throws {
@@ -104,6 +109,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             css = try container.decodeIfPresent(String.self, forKey: .css) ?? "style.css"
             diagramsEnabled = try container.decodeIfPresent(Bool.self, forKey: .diagramsEnabled) ?? true
             diagramsDir = try container.decodeIfPresent(String.self, forKey: .diagramsDir) ?? "diagrams"
+            trackBuilds = try container.decodeIfPresent(Bool.self, forKey: .trackBuilds) ?? true
         }
     }
 

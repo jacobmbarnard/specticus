@@ -149,6 +149,7 @@ import Foundation
     let project = try SpecticusProject.load(from: tmp.path)
     #expect(project.configSource == .defaults)
     #expect(project.config.build.output == "output.html")
+    #expect(project.config.build.trackBuilds == true)
     #expect(project.documentTitle == "specticus • Documentation")
 }
 
@@ -253,4 +254,63 @@ import Foundation
     let assembled = try DocumentGenerator.assembleSources(input: nil, baseDirectory: tmp.path)
     #expect(assembled.contains("VISIBLE"))
     #expect(!assembled.contains("SHOULD-NOT-APPEAR"))
+}
+
+// MARK: - Build tracking (#8)
+
+@Test func buildTrackerIncrementsAndPersists() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-buildtrack-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp.appendingPathComponent(".specticus"), withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let url = tmp.appendingPathComponent(".specticus/build-number.yml")
+    let fixed = Date(timeIntervalSince1970: 1_720_000_000) // fixed for determinism
+
+    let first = try BuildTracker.incrementAndSave(at: url, now: fixed)
+    #expect(first.number == 1)
+    #expect(!first.lastBuilt.isEmpty)
+    #expect(fm.fileExists(atPath: url.path))
+
+    let second = try BuildTracker.incrementAndSave(at: url, now: fixed.addingTimeInterval(60))
+    #expect(second.number == 2)
+
+    let loaded = try BuildTracker.load(from: url)
+    #expect(loaded?.number == 2)
+    #expect(loaded?.lastBuilt == second.lastBuilt)
+}
+
+@Test func buildRecordDisplayLineIncludesNumberAndDate() {
+    let record = BuildRecord(number: 7, lastBuilt: "2026-07-09T21:08:00Z")
+    let line = record.displayLine
+    #expect(line.contains("build 7"))
+    #expect(line.contains("2026-07-09"))
+    #expect(line.contains("Generated on"))
+}
+
+@Test func generateHTMLIncludesBuildFooterWhenProvided() throws {
+    let record = BuildRecord(number: 3, lastBuilt: "2026-07-09T12:00:00Z")
+    let html = try DocumentGenerator.generateHTML(
+        from: "# Hi",
+        title: "Doc",
+        stylesheet: "style.css",
+        buildInfo: record
+    )
+    #expect(html.contains("site-footer"))
+    #expect(html.contains("build 3"))
+    #expect(html.contains("Generated on"))
+}
+
+@Test func generateHTMLOmitsFooterWithoutBuildInfo() throws {
+    let html = try DocumentGenerator.generateHTML(from: "# Hi", title: "Doc")
+    #expect(!html.contains("site-footer"))
+}
+
+@Test func configParsesTrackBuilds() throws {
+    let yaml = """
+    build:
+      track_builds: false
+    """
+    let config = try SpecticusConfig.parse(yaml: yaml)
+    #expect(config.build.trackBuilds == false)
 }

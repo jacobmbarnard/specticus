@@ -9,6 +9,7 @@ struct Build: ParsableCommand {
         discussion: """
         Assembles Markdown sources (single file via --input, or multi-file lex order by default per #3) \
         then renders to HTML. Project settings load from `.specticus/config.yml` when present (#7). \
+        Each build can increment a counter in `.specticus/build-number.yml` and stamp the HTML footer (#8). \
         Use `specticus lint` first to validate. CLI flags override config values.
         """
     )
@@ -21,6 +22,9 @@ struct Build: ParsableCommand {
 
     @Flag(name: .long, help: "Skip diagram processing (placeholder for #5; geared for Mermaid)")
     var skipDiagrams: Bool = false
+
+    @Flag(name: .long, help: "Do not increment build number or stamp the document footer (overrides build.track_builds)")
+    var skipBuildTracking: Bool = false
 
     func run() throws {
         let project = try SpecticusProject.load()
@@ -39,10 +43,20 @@ struct Build: ParsableCommand {
             fallbackInput: project.config.build.defaultInput
         )
 
+        var buildInfo: BuildRecord?
+        let trackingOn = project.config.build.trackBuilds && !skipBuildTracking
+        if trackingOn {
+            buildInfo = try BuildTracker.incrementAndSave(at: project.buildNumberURL)
+            if let buildInfo {
+                print("🔢 \(buildInfo.displayLine)")
+            }
+        }
+
         let html = try DocumentGenerator.generateHTML(
             from: markdown,
             title: project.documentTitle,
-            stylesheet: project.styleSheetPath
+            stylesheet: project.styleSheetPath,
+            buildInfo: buildInfo
         )
 
         let outputPath = output ?? project.defaultOutputPath
