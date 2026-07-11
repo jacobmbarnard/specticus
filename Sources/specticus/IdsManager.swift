@@ -269,9 +269,20 @@ enum IdsManager {
         return (hashes.count, title)
     }
 
+    /// Parses a traceability ID from an outline-stripped heading title according to the
+    /// exact syntax rules defined in issue #31.
+    ///
+    /// Rules (must match exactly after `HeadingNumberer.stripOutlinePrefix`):
+    /// - ID must be the very first token: `ID ::= PREFIX DIGITS`
+    /// - PREFIX ::= [A-Z]{1,4}   (e.g. BR, TS, ADR, UC, BC, TC, DIAG, REV, BDR)
+    /// - DIGITS ::= [1-9][0-9]*  (no leading zero, no padding)
+    /// - Must be immediately followed by a required delimiter: `:`, `.`, or whitespace
+    /// - Only knownPrefixes are accepted
+    /// - ID at any other position, with brackets, dashes, lowercase, or inside non-heading
+    ///   content is rejected (see also #30 for content-type filtering).
     private static func parseID(from title: String) -> (id: String, content: String)? {
-        // title should be outline-stripped already
-        let pattern = #"^([A-Z]{2,4})([1-9]\d*)([:.\s]+)(.*)$"#
+        // title must already be outline-stripped; we require the ID at absolute start
+        let pattern = #"^([A-Z]{1,4})([1-9]\d*)([:.\s]+)(.*)$"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
         let ns = title as NSString
         guard let m = regex.firstMatch(in: title, range: NSRange(0..<ns.length)) else { return nil }
