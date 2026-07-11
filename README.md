@@ -29,7 +29,7 @@ swift build -c release
 cp .build/release/specticus ~/.local/bin/specticus
 ```
 
-> Binary releases and Homebrew support are planned.
+> **Planned:** Binary releases, Windows installer (#61), Linux packages via apt/yum (#62), and Homebrew support.
 
 ## Quick Start
 
