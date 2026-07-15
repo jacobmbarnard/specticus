@@ -52,6 +52,13 @@ enum IdsManager {
     }
 
     /// Scans the project's content Markdown (top-level like assembleSources) and returns heading info.
+    ///
+    /// Per issue #30, the ID scanner **ignores** headings that appear inside:
+    /// - Fenced code blocks (``` or ~~~)
+    /// - Blockquotes (lines starting with `>`)
+    /// - HTML comments (<!-- ... -->)
+    /// - Tables (lines starting with `|`)
+    /// This prevents accidental ID assignment or drift detection for example code and non-body content.
     static func collectHeadings(project: SpecticusProject) throws -> [HeadingInfo] {
         let fm = FileManager.default
         let base = project.root
@@ -78,7 +85,41 @@ enum IdsManager {
             let raw = try String(contentsOf: file, encoding: .utf8)
             let lines = raw.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
+            var inFence = false
+            var inComment = false
+
             for (idx, line) in lines.enumerated() {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+                // Track fenced code blocks (``` or ~~~)
+                if isFenceDelimiter(trimmed) {
+                    inFence.toggle()
+                    continue
+                }
+                if inFence { continue }
+
+                // Track HTML comments (multi-line aware)
+                if trimmed.hasPrefix("<!--") {
+                    inComment = true
+                    // Check for immediate close on same line
+                    if trimmed.contains("-->") {
+                        inComment = false
+                    }
+                    continue
+                }
+                if inComment {
+                    if trimmed.contains("-->") {
+                        inComment = false
+                    }
+                    continue
+                }
+
+                // Skip blockquotes (lines starting with > after optional ws)
+                if trimmed.hasPrefix(">") { continue }
+
+                // Skip table rows (conservative: anything starting with | after ws)
+                if trimmed.hasPrefix("|") { continue }
+
                 guard let (level, title) = parseATXHeading(line) else { continue }
                 guard level >= 2 else { continue }  // IDs for H2+ (H1 is doc title)
 
@@ -109,6 +150,10 @@ enum IdsManager {
         }
 
         return results
+    }
+
+    private static func isFenceDelimiter(_ trimmed: String) -> Bool {
+        return trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~")
     }
 
     /// Main entry for `ids assign`.

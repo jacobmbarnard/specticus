@@ -664,3 +664,184 @@ import Foundation
     #expect(headings[0].id.map { out.contains($0) } ?? false)
     #expect(headings[1].id.map { out.contains($0) } ?? false)
 }
+
+// MARK: - Ignore IDs in non-content constructs (#30)
+
+@Test func idsCollectHeadingsSkipsFencedCodeBlocks() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-idfilter-fence-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let content = """
+# Real Doc
+
+## BR1: Actual Requirement
+
+Text.
+
+```
+## BR99: Example in code fence
+```
+
+~~~
+### TS77: Another fenced example
+~~~
+
+## BR2: Second Real
+"""
+    try content.write(to: tmp.appendingPathComponent("001-req.md"), atomically: true, encoding: .utf8)
+
+    // Need minimal project structure for load
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let headings = try IdsManager.collectHeadings(project: project)
+
+    let ids = headings.compactMap { $0.id }
+    #expect(ids.contains("BR1"))
+    #expect(ids.contains("BR2"))
+    #expect(!ids.contains("BR99"))
+    #expect(!ids.contains("TS77"))
+}
+
+@Test func idsCollectHeadingsSkipsBlockquotes() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-idfilter-bq-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let content = """
+# Doc
+
+## BR1: Real Heading
+
+> ## BR42: This is example in blockquote
+> Do not assign IDs here.
+
+## BR2: Another Real
+"""
+    try content.write(to: tmp.appendingPathComponent("002-bq.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let headings = try IdsManager.collectHeadings(project: project)
+
+    let ids = headings.compactMap { $0.id }
+    #expect(ids.contains("BR1"))
+    #expect(ids.contains("BR2"))
+    #expect(!ids.contains("BR42"))
+}
+
+@Test func idsCollectHeadingsSkipsHtmlComments() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-idfilter-comment-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let content = """
+# Doc
+
+<!-- 
+## BR88: Commented out requirement
+-->
+
+## BR1: Visible
+
+<!--
+### TS99: Multi-line
+comment block
+-->
+
+## BR2: Also Visible
+"""
+    try content.write(to: tmp.appendingPathComponent("003-comments.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let headings = try IdsManager.collectHeadings(project: project)
+
+    let ids = headings.compactMap { $0.id }
+    #expect(ids.contains("BR1"))
+    #expect(ids.contains("BR2"))
+    #expect(!ids.contains("BR88"))
+    #expect(!ids.contains("TS99"))
+}
+
+@Test func idsCollectHeadingsSkipsTables() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-idfilter-table-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let content = """
+# Doc
+
+| ID | Desc |
+|----|------|
+| BR77 | Fake in table |
+
+## BR1: Real Table Test Case
+"""
+    try content.write(to: tmp.appendingPathComponent("004-tables.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let headings = try IdsManager.collectHeadings(project: project)
+
+    let ids = headings.compactMap { $0.id }
+    #expect(ids.contains("BR1"))
+    #expect(!ids.contains("BR77"))
+}
+
+@Test func idsAssignIgnoresNonContentHeadings() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-idassign-filter-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let content = """
+# Spec
+
+```
+## BR99: Should never be assigned in fence
+```
+
+> ## TS55: Also never in quote
+
+## BR1: Real One
+"""
+    try content.write(to: tmp.appendingPathComponent("005-assign.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+
+    // collectHeadings must ignore headings inside fences, blockquotes, comments, and tables (#30).
+    // The only recognized heading with an ID should be the real BR1 outside any exclusion zone.
+    let headings = try IdsManager.collectHeadings(project: project)
+    let idsFound = headings.compactMap { $0.id }
+
+    #expect(idsFound == ["BR1"])
+    #expect(!idsFound.contains("BR99"))
+    #expect(!idsFound.contains("TS55"))
+
+    // Also ensure we did not surface the example headings at all (even without IDs)
+    let allContent = headings.map { $0.content }
+    #expect(!allContent.contains { $0.contains("Should never") })
+    #expect(!allContent.contains { $0.contains("Also never") })
+    #expect(allContent.contains { $0.contains("Real One") })
+}
