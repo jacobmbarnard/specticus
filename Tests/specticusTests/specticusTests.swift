@@ -845,3 +845,166 @@ comment block
     #expect(!allContent.contains { $0.contains("Also never") })
     #expect(allContent.contains { $0.contains("Real One") })
 }
+
+// MARK: - ID scanner strips outline numbering (#34)
+
+@Test func stripOutlinePrefixLeavesIDsAndPlainTitles() {
+    // Shared utility used by both #4 renumbering and #34 ID scanning.
+    #expect(HeadingNumberer.stripOutlinePrefix(from: "1.2. BR1: User Login") == "BR1: User Login")
+    #expect(HeadingNumberer.stripOutlinePrefix(from: "1.2.3. TS10: Login Screen") == "TS10: Login Screen")
+    #expect(HeadingNumberer.stripOutlinePrefix(from: "12. User Login") == "User Login")
+    #expect(HeadingNumberer.stripOutlinePrefix(from: "BR1: User Login") == "BR1: User Login")
+    #expect(HeadingNumberer.stripOutlinePrefix(from: "User Login") == "User Login")
+    // Must not treat ID-like tokens as outline numbers
+    #expect(HeadingNumberer.stripOutlinePrefix(from: "BR1: 1.2. Nested mention") == "BR1: 1.2. Nested mention")
+}
+
+@Test func idsCollectHeadingsStripsOutlineBeforeDetectingIDs() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-id-outline-scan-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    // Numbered form as produced by HeadingNumberer (#4): outline prefix before the ID.
+    let numbered = """
+# Requirements
+## 1.1. BR1: User Login
+## 1.2. BR2: View Dashboard
+### 1.2.1. TS10: Login Screen
+"""
+    try numbered.write(to: tmp.appendingPathComponent("007-business-requirements.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let headings = try IdsManager.collectHeadings(project: project)
+
+    let byID = Dictionary(uniqueKeysWithValues: headings.compactMap { h -> (String, IdsManager.HeadingInfo)? in
+        guard let id = h.id else { return nil }
+        return (id, h)
+    })
+
+    #expect(byID["BR1"]?.content == "User Login")
+    #expect(byID["BR2"]?.content == "View Dashboard")
+    #expect(byID["TS10"]?.content == "Login Screen")
+    // Outline digits must not leak into content bindings (would cause false drift).
+    #expect(byID["BR1"]?.content.contains("1.1") != true)
+    #expect(byID["BR2"]?.content.contains("1.2") != true)
+}
+
+@Test func idsCollectHeadingsHandlesMixedNumberedAndUnnumberedFiles() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-id-outline-mixed-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    // File A: already numbered in source (e.g. from a previous build paste or manual outline)
+    let numberedFile = """
+# Spec A
+## 1.1. BR1: User Login
+## 1.2. Business requirement for logout
+"""
+    // File B: unnumbered source (normal authoring style)
+    let plainFile = """
+# Spec B
+## BR2: View Dashboard
+## Technical specification for API
+"""
+    try numberedFile.write(to: tmp.appendingPathComponent("007-a.md"), atomically: true, encoding: .utf8)
+    try plainFile.write(to: tmp.appendingPathComponent("008-b.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let headings = try IdsManager.collectHeadings(project: project)
+
+    let withIDs = headings.filter { $0.id != nil }
+    let withoutIDs = headings.filter { $0.id == nil }
+
+    #expect(Set(withIDs.compactMap(\.id)) == Set(["BR1", "BR2"]))
+    #expect(withIDs.first { $0.id == "BR1" }?.content == "User Login")
+    #expect(withIDs.first { $0.id == "BR2" }?.content == "View Dashboard")
+
+    // Unnumbered-by-ID headings still have outline stripped from content for assign/bindings.
+    let logout = withoutIDs.first { $0.content.contains("logout") }
+    let api = withoutIDs.first { $0.content.contains("API") }
+    #expect(logout?.content == "Business requirement for logout")
+    #expect(api?.content == "Technical specification for API")
+    #expect(logout?.content.hasPrefix("1.") != true)
+}
+
+@Test func idsAssignPreservesOutlinePrefixWhenInsertingID() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-id-outline-assign-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    // Numbered heading without an ID yet — assign must insert ID after the outline, not before.
+    let mdURL = tmp.appendingPathComponent("007-business-requirements.md")
+    let content = """
+# Requirements
+## 1.1. Business requirement for user login
+## BR2: Already tagged view
+"""
+    try content.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    try IdsManager.assignIDs(project: project, dryRun: false)
+
+    let rewritten = try String(contentsOf: mdURL, encoding: .utf8)
+    // ID after outline: "## 1.1. BRn: …" — never "## BRn: 1.1. …"
+    #expect(rewritten.contains("## 1.1. BR") || rewritten.contains("## 1.1. BR1:"))
+    #expect(!rewritten.contains("## BR1: 1.1."))
+    #expect(!rewritten.contains("## BR3: 1.1."))
+    #expect(rewritten.contains("## BR2: Already tagged view"))
+
+    // Re-scan: content binding must be outline-free descriptive text only.
+    let headings = try IdsManager.collectHeadings(project: project)
+    let assigned = headings.first { $0.content.lowercased().contains("user login") }
+    #expect(assigned?.id != nil)
+    #expect(assigned?.content == "Business requirement for user login")
+    #expect(assigned?.content.contains("1.1") != true)
+}
+
+@Test func idsScanMatchesNumberedPipelineOutput() throws {
+    // End-to-end disjointness: build-time numbering then ID scan must still see real IDs.
+    let md = """
+# Requirements
+## BR1: User Login
+## BR2: View Dashboard
+### TS10: Login Screen
+"""
+    let numbered = HeadingNumberer.numberHeadings(in: md, maxLevel: 3)
+    #expect(numbered.contains("## 1.1. BR1: User Login"))
+    #expect(numbered.contains("## 1.2. BR2: View Dashboard"))
+    #expect(numbered.contains("### 1.2.1. TS10: Login Screen"))
+
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-id-outline-pipeline-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    try numbered.write(to: tmp.appendingPathComponent("007-reqs.md"), atomically: true, encoding: .utf8)
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let headings = try IdsManager.collectHeadings(project: project)
+    let ids = Set(headings.compactMap(\.id))
+    #expect(ids == Set(["BR1", "BR2", "TS10"]))
+    #expect(headings.first { $0.id == "BR1" }?.content == "User Login")
+    #expect(headings.first { $0.id == "TS10" }?.content == "Login Screen")
+}

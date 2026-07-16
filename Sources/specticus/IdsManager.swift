@@ -123,6 +123,10 @@ enum IdsManager {
                 guard let (level, title) = parseATXHeading(line) else { continue }
                 guard level >= 2 else { continue }  // IDs for H2+ (H1 is doc title)
 
+                // Issue #34: strip hierarchical outline numbering (#4) before ID detection.
+                // Sources may mix numbered (`## 1.2. BR1: …`) and unnumbered (`## BR1: …`)
+                // headings; outline prefixes are presentation-only and must not affect IDs.
+                // Completely disjoint from heading numbering — we only strip, never invent numbers.
                 let cleaned = HeadingNumberer.stripOutlinePrefix(from: title)
 
                 if let (id, content) = parseID(from: cleaned) {
@@ -405,8 +409,15 @@ enum IdsManager {
         return Int(digits) ?? 0
     }
 
+    /// Inserts a newly assigned ID into an ATX heading line.
+    ///
+    /// Per issue #34, if the heading already has a hierarchical outline prefix
+    /// (e.g. `## 1.2. User Login`), the ID is placed **after** that prefix so the
+    /// line becomes `## 1.2. BR1: User Login`. Putting the ID before the outline
+    /// would break subsequent scans and pollute content bindings with outline text.
+    /// We never invent or modify outline numbers here (disjoint from #4).
     private static func addIDPrefix(to line: String, id: String) -> String {
-        // Match ATX heading and insert ID after the hashes+space
+        // Match ATX heading and insert ID after the hashes+space (and after any outline prefix)
         guard let regex = try? NSRegularExpression(pattern: #"^(\s*)(#{1,6})(\s+)(.*)$"#) else { return line }
         let ns = line as NSString
         guard let m = regex.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) else { return line }
@@ -416,7 +427,14 @@ enum IdsManager {
         let space = ns.substring(with: m.range(at: 3))
         let rest = ns.substring(with: m.range(at: 4))
 
-        // If rest already starts with an ID we shouldn't be here, but guard
+        // Preserve an existing outline prefix from #4 if present in source (mixed files).
+        if let outlineRange = rest.range(of: #"^\d+(?:\.\d+)*\.\s+"#, options: .regularExpression) {
+            let outline = String(rest[outlineRange])
+            let afterOutline = String(rest[outlineRange.upperBound...])
+            let newTitle = "\(outline)\(id): \(afterOutline)"
+            return "\(indent)\(hashes)\(space)\(newTitle)"
+        }
+
         let newTitle = "\(id): \(rest)"
         return "\(indent)\(hashes)\(space)\(newTitle)"
     }
