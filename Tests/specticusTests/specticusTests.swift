@@ -1178,3 +1178,103 @@ comment block
     #expect(assigned == ["BR1"])
     #expect(headings.filter { $0.id != nil }.allSatisfy { $0.level == 2 })
 }
+
+// MARK: - Prefix inference for new headings (assign recognition)
+
+@Test func idsAssignRecognizesPlainH2InTechnicalSpecificationsFile() throws {
+    // Regression: plain-language H2 titles in 008-technical-specifications.md must get TS IDs
+    // even when the title itself has no "specification"/"shall" keywords.
+    // (With #32, H1 may also receive a TS from section title/filename; assert H2s specifically.)
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-id-new-ts-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("008-technical-specifications.md")
+    let content = """
+# Technical Specifications
+## TS1: Login Screen Appearance
+## TS2: Login Help Dialog
+## Brand Color Palette
+## Password Reset Flow
+"""
+    try content.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    try IdsManager.assignIDs(project: project, dryRun: false)
+
+    let rewritten = try String(contentsOf: mdURL, encoding: .utf8)
+    let lines = rewritten.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    #expect(lines.contains("## TS1: Login Screen Appearance"))
+    #expect(lines.contains("## TS2: Login Help Dialog"))
+    #expect(lines.contains { $0.hasPrefix("## TS") && $0.contains("Brand Color Palette") })
+    #expect(lines.contains { $0.hasPrefix("## TS") && $0.contains("Password Reset Flow") })
+
+    let headings = try IdsManager.collectHeadings(project: project)
+    let h2IDs = headings.filter { $0.level == 2 }.compactMap(\.id)
+    #expect(Set(h2IDs).isSuperset(of: ["TS1", "TS2"]))
+    #expect(h2IDs.filter { $0.hasPrefix("TS") }.count >= 4)
+}
+
+@Test func idsAssignInheritsPrefixFromSiblingIDsInSameFile() throws {
+    // Even with a non-skeleton filename, existing TS* siblings imply TS for new plain H2s.
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-id-sibling-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("misc-notes.md")
+    try """
+# Notes
+## TS1: Existing Spec
+## Brand Color Palette
+""".write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    try IdsManager.assignIDs(project: project, dryRun: false)
+
+    let rewritten = try String(contentsOf: mdURL, encoding: .utf8)
+    let lines = rewritten.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    // Plain H2 inherits TS from sibling TS1 (H1 may also inherit under #32 H1 eligibility).
+    #expect(lines.contains { $0.hasPrefix("## TS") && $0.contains("Brand Color Palette") })
+    #expect(lines.contains("## TS1: Existing Spec"))
+}
+
+@Test func idsAssignUsesBusinessRequirementsFilenameForPlainH2() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-id-new-br-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-business-requirements.md")
+    // Neutral H1 (no "requirement" keyword) so only the plain H2 is the focus; filename still → BR.
+    try """
+# Section
+## BR1: User Login
+## Offline Mode
+""".write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    try IdsManager.assignIDs(project: project, dryRun: false)
+
+    let rewritten = try String(contentsOf: mdURL, encoding: .utf8)
+    let lines = rewritten.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    // H2 Offline Mode must get a BR* ID via filename (and/or siblings). H1 may also get one from filename.
+    #expect(lines.contains { $0.hasPrefix("## BR") && $0.contains("Offline Mode") })
+    #expect(lines.contains("## BR1: User Login"))
+}

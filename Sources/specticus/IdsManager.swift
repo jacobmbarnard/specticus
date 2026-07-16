@@ -228,12 +228,17 @@ enum IdsManager {
             }
         }
 
+        // Per-file context: if a file already owns IDs of one prefix family (e.g. TS1, TS2),
+        // new plain-language headings in that file inherit that prefix. This is how a new H2
+        // under technical specifications gets TS without needing the word "specification" in the title.
+        let fileContextPrefix = dominantPrefixByFile(in: headings)
+
         // Assign new IDs
         var newlyAssigned: [(info: HeadingInfo, newID: String)] = []
         var skippedCount = 0
         var skippedExamples: [String] = []
         for h in headingsNeedingID {
-            guard let prefix = inferPrefix(from: h.content) ?? inferPrefix(from: h.file.lastPathComponent) else {
+            guard let prefix = resolvePrefix(for: h, fileContextPrefix: fileContextPrefix[h.file]) else {
                 skippedCount += 1
                 if skippedExamples.count < 3 {
                     skippedExamples.append("\(h.content) [\(h.file.lastPathComponent)]")
@@ -255,6 +260,7 @@ enum IdsManager {
             if skippedCount > skippedExamples.count {
                 print("    ... and \(skippedCount - skippedExamples.count) more")
             }
+            print("    Tip: put the item in a section file (e.g. 008-technical-specifications.md), use a keyword in the title, or add a manual ID like `## TS3: …`.")
         }
 
         if dryRun {
@@ -275,6 +281,15 @@ enum IdsManager {
         }
 
         if hasProblems {
+            if !newlyAssigned.isEmpty {
+                print("ℹ️  \(newlyAssigned.count) heading(s) are ready for new IDs but were not written because of the problems above:")
+                for (h, id) in newlyAssigned.prefix(10) {
+                    print("     would assign \(id): \(h.content)  [\(h.file.lastPathComponent)]")
+                }
+                if newlyAssigned.count > 10 {
+                    print("     ... and \(newlyAssigned.count - 10) more")
+                }
+            }
             print("Aborting write due to duplicates or drift. Fix issues and re-run `ids assign`.")
             // Do not mutate bindings on problems (user should resolve drift/dupe first)
             return
@@ -354,24 +369,48 @@ enum IdsManager {
         return (id, content)
     }
 
-    private static func inferPrefix(from text: String) -> String? {
+    /// Resolves which ID prefix to use when assigning a new ID to a heading.
+    ///
+    /// Priority:
+    /// 1. Keywords in the heading text itself
+    /// 2. Section filename (skeleton `00N-technical-specifications.md`, etc.)
+    /// 3. Dominant prefix already used by other owned IDs in the same file (sibling context)
+    private static func resolvePrefix(for heading: HeadingInfo, fileContextPrefix: String?) -> String? {
+        if let fromContent = inferPrefixFromContent(heading.content) {
+            return fromContent
+        }
+        if let fromFile = inferPrefixFromFilename(heading.file.lastPathComponent) {
+            return fromFile
+        }
+        return fileContextPrefix
+    }
+
+    /// Most common ID prefix among headings that already own an ID in each file.
+    private static func dominantPrefixByFile(in headings: [HeadingInfo]) -> [URL: String] {
+        var counts: [URL: [String: Int]] = [:]
+        for h in headings {
+            guard let id = h.id, let prefix = prefixOf(id: id) else { continue }
+            counts[h.file, default: [:]][prefix, default: 0] += 1
+        }
+        var result: [URL: String] = [:]
+        for (file, prefixCounts) in counts {
+            if let best = prefixCounts.max(by: { lhs, rhs in
+                if lhs.value != rhs.value { return lhs.value < rhs.value }
+                // Stable tie-break: prefer earlier knownPrefixes entry
+                let li = knownPrefixes.firstIndex(of: lhs.key) ?? Int.max
+                let ri = knownPrefixes.firstIndex(of: rhs.key) ?? Int.max
+                return li > ri
+            }) {
+                result[file] = best.key
+            }
+        }
+        return result
+    }
+
+    /// Infer prefix from heading descriptive text only (not filenames).
+    private static func inferPrefixFromContent(_ text: String) -> String? {
         let lower = text.lowercased()
 
-        // Filename hints
-        if lower.contains("business-constraint") || lower.contains("business constraint") {
-            return "BC"
-        }
-        if lower.contains("technical-constraint") || lower.contains("technical constraint") {
-            return "TC"
-        }
-        if lower.contains("diagram") {
-            return "DIAG"
-        }
-        if lower.contains("revision") {
-            return "REV"
-        }
-
-        // Content based
         if lower.contains("business requirement") || lower.contains("requirement") || lower.contains("shall ") {
             return "BR"
         }
@@ -384,17 +423,17 @@ enum IdsManager {
         if lower.contains("test case") || lower.contains("test plan") {
             return "TC"
         }
-        if lower.contains("business constraint") || lower.contains("constraint") {
-            return "BC"
-        }
         if lower.contains("technical constraint") {
             return "TC"
         }
-        if lower.contains("architecture decision") || lower.contains("adr") || lower.contains("decision") {
-            return "ADR"
+        if lower.contains("business constraint") || lower.contains("constraint") {
+            return "BC"
         }
         if lower.contains("business decision") || lower.contains("bdr") {
             return "BDR"
+        }
+        if lower.contains("architecture decision") || lower.contains("adr") || lower.contains("decision") {
+            return "ADR"
         }
         if lower.contains("diagram") {
             return "DIAG"
@@ -405,9 +444,84 @@ enum IdsManager {
         return nil
     }
 
+    /// Infer prefix from a Markdown filename (skeleton section names and common aliases).
+    private static func inferPrefixFromFilename(_ filename: String) -> String? {
+        var base = filename.lowercased()
+        if let dot = base.lastIndex(of: ".") {
+            base = String(base[..<dot])
+        }
+        // Normalize separators so both "technical-specifications" and "technical_specifications" match.
+        let normalized = base.replacingOccurrences(of: "_", with: "-")
+
+        // Most specific patterns first (skeleton 00N-* names).
+        if normalized.contains("business-requirement") || normalized.contains("business-requirements") {
+            return "BR"
+        }
+        if normalized.contains("technical-specification")
+            || normalized.contains("technical-specifications")
+            || normalized.contains("technical-spec")
+            || normalized.contains("tech-spec") {
+            return "TS"
+        }
+        if normalized.contains("business-constraint") || normalized.contains("business-constraints") {
+            return "BC"
+        }
+        if normalized.contains("technical-constraint") || normalized.contains("technical-constraints") {
+            return "TC"
+        }
+        if normalized.contains("use-case") || normalized.contains("use-cases") {
+            return "UC"
+        }
+        if normalized.contains("test-plan") || normalized.contains("test-case") || normalized.contains("test-cases") {
+            return "TC"
+        }
+        if normalized.contains("business-decision") || normalized.contains("bdr") {
+            return "BDR"
+        }
+        if normalized.contains("architecture") || normalized.contains("-adr") || normalized.hasPrefix("adr") {
+            return "ADR"
+        }
+        if normalized.contains("diagram") {
+            return "DIAG"
+        }
+        if normalized.contains("revision") {
+            return "REV"
+        }
+        // Weaker filename fallbacks (still useful for non-skeleton layouts).
+        if normalized.contains("requirement") {
+            return "BR"
+        }
+        if normalized.contains("specification") || normalized.hasSuffix("-specs")
+            || normalized.hasSuffix("-spec") || normalized == "specs" || normalized == "spec" {
+            return "TS"
+        }
+        if normalized.contains("constraint") {
+            return "BC"
+        }
+        return nil
+    }
+
+    /// Legacy entry used by tests / call sites that pass free-form text (content or filename).
+    private static func inferPrefix(from text: String) -> String? {
+        // Prefer content-style matching; if it looks like a filename, try filename rules too.
+        if let fromContent = inferPrefixFromContent(text) {
+            return fromContent
+        }
+        if text.contains(".") || text.contains("-") || text.contains("_") || text.contains("/") {
+            return inferPrefixFromFilename(text)
+        }
+        return nil
+    }
+
     private static func prefixOf(id: String) -> String? {
-        for p in knownPrefixes where id.hasPrefix(p) {
-            return p
+        // Longest prefix first so e.g. BDR wins over BR if both ever matched.
+        let ordered = knownPrefixes.sorted { $0.count > $1.count }
+        for p in ordered where id.hasPrefix(p) {
+            // Require that the remainder starts with a digit (BR1, not BROKEN)
+            let rest = id.dropFirst(p.count)
+            if let first = rest.first, first.isNumber {
+                return p
+            }
         }
         return nil
     }
