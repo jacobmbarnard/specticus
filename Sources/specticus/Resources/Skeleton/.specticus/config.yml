@@ -37,3 +37,7 @@ ids:
   # IDs use simple form BR1 / TS2 / ADR3 (no dash, no zero-padding). Must be unique.
   # Drift detection and warnings apply in ids assign, lint, and build.
   auto_assign: false
+  # ATX heading levels 1…heading_max_level may own traceability IDs (#32).
+  # Default 2 = H1 and H2 only. Raise to 3…6 to include deeper headings (e.g. nested test cases).
+  # Independent of build.heading_number_max_level (#4) and toc_max_level (#12).
+  heading_max_level: 2
