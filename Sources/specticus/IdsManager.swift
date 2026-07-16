@@ -59,9 +59,15 @@ enum IdsManager {
     /// - HTML comments (<!-- ... -->)
     /// - Tables (lines starting with `|`)
     /// This prevents accidental ID assignment or drift detection for example code and non-body content.
+    ///
+    /// Per issue #32, only ATX levels **1…`ids.heading_max_level`** may own IDs
+    /// (default H1+H2; configurable through H6). Deeper headings are skipped entirely.
     static func collectHeadings(project: SpecticusProject) throws -> [HeadingInfo] {
         let fm = FileManager.default
         let base = project.root
+        let maxLevel = SpecticusConfig.IdsSection.clampHeadingMaxLevel(
+            project.config.ids.headingMaxLevel
+        )
 
         let contents = try fm.contentsOfDirectory(
             at: base,
@@ -121,7 +127,9 @@ enum IdsManager {
                 if trimmed.hasPrefix("|") { continue }
 
                 guard let (level, title) = parseATXHeading(line) else { continue }
-                guard level >= 2 else { continue }  // IDs for H2+ (H1 is doc title)
+                // Issue #32: eligible levels are 1…heading_max_level (default 2 = H1+H2).
+                guard level >= SpecticusConfig.IdsSection.minHeadingLevel,
+                      level <= maxLevel else { continue }
 
                 // Issue #34: strip hierarchical outline numbering (#4) before ID detection.
                 // Sources may mix numbered (`## 1.2. BR1: …`) and unnumbered (`## BR1: …`)

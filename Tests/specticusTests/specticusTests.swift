@@ -72,6 +72,7 @@ import Foundation
       bdrs_enabled: false
     ids:
       auto_assign: true
+      heading_max_level: 4
     """
     let config = try SpecticusConfig.parse(yaml: yaml)
     #expect(config.version == 1)
@@ -85,6 +86,7 @@ import Foundation
     #expect(config.decisionRecords.adrsEnabled == true)
     #expect(config.decisionRecords.bdrsEnabled == false)
     #expect(config.ids.autoAssign == true)
+    #expect(config.ids.headingMaxLevel == 4)
 }
 
 @Test func configPartialYAMLUsesDefaults() throws {
@@ -102,6 +104,8 @@ import Foundation
     #expect(config.build.diagramsEnabled == true)
     #expect(config.build.diagramsDir == "diagrams")
     #expect(config.ids.autoAssign == false)
+    #expect(config.ids.headingMaxLevel == SpecticusConfig.IdsSection.defaultHeadingMaxLevel)
+    #expect(config.ids.headingMaxLevel == 2)
 }
 
 @Test func projectLoadUsesConfigAndTitle() throws {
@@ -867,6 +871,7 @@ comment block
     defer { try? fm.removeItem(at: tmp) }
 
     // Numbered form as produced by HeadingNumberer (#4): outline prefix before the ID.
+    // H3 ID included with heading_max_level: 3 so outline strip is tested at nested depth.
     let numbered = """
 # Requirements
 ## 1.1. BR1: User Login
@@ -877,7 +882,11 @@ comment block
 
     let specticusDir = tmp.appendingPathComponent(".specticus")
     try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
-    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+    try """
+    version: 1
+    ids:
+      heading_max_level: 3
+    """.write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
 
     let project = try SpecticusProject.load(from: tmp.path)
     let headings = try IdsManager.collectHeadings(project: project)
@@ -999,7 +1008,12 @@ comment block
     try numbered.write(to: tmp.appendingPathComponent("007-reqs.md"), atomically: true, encoding: .utf8)
     let specticusDir = tmp.appendingPathComponent(".specticus")
     try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
-    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+    // Raise max so H3 TS10 is in scope for this pipeline check (#32).
+    try """
+    version: 1
+    ids:
+      heading_max_level: 3
+    """.write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
 
     let project = try SpecticusProject.load(from: tmp.path)
     let headings = try IdsManager.collectHeadings(project: project)
@@ -1007,4 +1021,160 @@ comment block
     #expect(ids == Set(["BR1", "BR2", "TS10"]))
     #expect(headings.first { $0.id == "BR1" }?.content == "User Login")
     #expect(headings.first { $0.id == "TS10" }?.content == "Login Screen")
+}
+
+// MARK: - ID heading levels (#32)
+
+@Test func idsHeadingMaxLevelClampAndConfigDefaults() throws {
+    #expect(SpecticusConfig.IdsSection.clampHeadingMaxLevel(0) == 1)
+    #expect(SpecticusConfig.IdsSection.clampHeadingMaxLevel(-5) == 1)
+    #expect(SpecticusConfig.IdsSection.clampHeadingMaxLevel(2) == 2)
+    #expect(SpecticusConfig.IdsSection.clampHeadingMaxLevel(6) == 6)
+    #expect(SpecticusConfig.IdsSection.clampHeadingMaxLevel(99) == 6)
+    #expect(SpecticusConfig.IdsSection.defaultHeadingMaxLevel == 2)
+
+    let yaml = """
+    version: 1
+    ids:
+      heading_max_level: 5
+    """
+    let config = try SpecticusConfig.parse(yaml: yaml)
+    #expect(config.ids.headingMaxLevel == 5)
+
+    let over = try SpecticusConfig.parse(yaml: """
+    ids:
+      heading_max_level: 99
+    """)
+    #expect(over.ids.headingMaxLevel == 6)
+}
+
+@Test func idsCollectHeadingsDefaultAllowsH1AndH2Only() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-id-levels-default-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let content = """
+# BR10: Document-level requirement
+## BR1: Section requirement
+### BR2: Nested should be ignored by default
+#### BR3: Deeper still ignored
+"""
+    try content.write(to: tmp.appendingPathComponent("007-reqs.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    // No heading_max_level → default 2
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    #expect(project.config.ids.headingMaxLevel == 2)
+
+    let headings = try IdsManager.collectHeadings(project: project)
+    let ids = Set(headings.compactMap(\.id))
+    #expect(ids == Set(["BR10", "BR1"]))
+    #expect(!ids.contains("BR2"))
+    #expect(!ids.contains("BR3"))
+    #expect(headings.allSatisfy { $0.level <= 2 })
+}
+
+@Test func idsCollectHeadingsRespectsRaisedHeadingMaxLevel() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-id-levels-raised-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let content = """
+# Doc
+## BR1: Top
+### TC1: Nested test case
+#### TS9: Too deep for max 3
+"""
+    try content.write(to: tmp.appendingPathComponent("010-test-plan.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try """
+    version: 1
+    ids:
+      heading_max_level: 3
+    """.write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let headings = try IdsManager.collectHeadings(project: project)
+    let ids = Set(headings.compactMap(\.id))
+    #expect(ids == Set(["BR1", "TC1"]))
+    #expect(!ids.contains("TS9"))
+    #expect(headings.allSatisfy { $0.level <= 3 })
+}
+
+@Test func idsCollectHeadingsCanIncludeThroughH6() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-id-levels-h6-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let content = """
+# BR1: L1
+## BR2: L2
+### BR3: L3
+#### BR4: L4
+##### BR5: L5
+###### BR6: L6
+"""
+    try content.write(to: tmp.appendingPathComponent("007-deep.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try """
+    version: 1
+    ids:
+      heading_max_level: 6
+    """.write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let headings = try IdsManager.collectHeadings(project: project)
+    let ids = Set(headings.compactMap(\.id))
+    #expect(ids == Set(["BR1", "BR2", "BR3", "BR4", "BR5", "BR6"]))
+}
+
+@Test func idsAssignOnlyTargetsEligibleHeadingLevels() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-id-levels-assign-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    // Neutral filename so H1 does not pick up a prefix from the path (#32 assign scope).
+    let mdURL = tmp.appendingPathComponent("007-section.md")
+    let content = """
+# Overview
+## Business requirement for login flow
+### Business requirement nested should not get an ID at default max
+"""
+    try content.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    try IdsManager.assignIDs(project: project, dryRun: false)
+
+    let rewritten = try String(contentsOf: mdURL, encoding: .utf8)
+    let lines = rewritten.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    #expect(lines.contains("## BR1: Business requirement for login flow"))
+    #expect(lines.contains("# Overview"))
+    // H1 / H3 must not have received an ID under default heading_max_level: 2
+    #expect(!lines.contains { $0.hasPrefix("# BR") && !$0.hasPrefix("##") })
+    #expect(lines.contains("### Business requirement nested should not get an ID at default max"))
+    #expect(!lines.contains { $0.hasPrefix("### BR") })
+
+    let headings = try IdsManager.collectHeadings(project: project)
+    let assigned = headings.compactMap(\.id)
+    #expect(assigned == ["BR1"])
+    #expect(headings.filter { $0.id != nil }.allSatisfy { $0.level == 2 })
 }
