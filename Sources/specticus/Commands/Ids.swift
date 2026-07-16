@@ -5,7 +5,7 @@ import ArgumentParser
 struct Ids: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Manage stable traceability IDs (BR1, TS2, ADR3, etc.).",
-        discussion: "See GitHub issue #6. IDs use simple form (BR1, BR2, TS1, ... no dash or padding). Must be unique. ids assign + lint detect content drift; build warns.",
+        discussion: "See GitHub issue #6. IDs use simple form (BR1, BR2, TS1, ... no dash or padding). Must be unique. Default: H1–H2 may own IDs (ids.heading_max_level, up to H6; #32). ids assign + lint detect content drift; build warns.",
         subcommands: [IdsAssign.self]
     )
 

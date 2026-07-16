@@ -165,18 +165,42 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
     struct IdsSection: Codable, Equatable, Sendable {
         /// When true, `ids assign` auto-assign behavior on build will run (see #6). IDs are simple BR1/TS2/ADR3 (no dash/padding).
         var autoAssign: Bool
+        /// Maximum ATX heading level that may own a traceability ID (#32).
+        /// Levels **1…headingMaxLevel** are eligible (default **2** = H1+H2; max **6**).
+        /// Completely disjoint from `build.heading_number_max_level` (#4) and TOC max (#12).
+        var headingMaxLevel: Int
+
+        /// Minimum ATX level that can ever own an ID (always H1).
+        static let minHeadingLevel = 1
+        /// Absolute maximum ATX level for ID ownership.
+        static let absoluteMaxHeadingLevel = 6
+        /// Product default: H1 and H2 only.
+        static let defaultHeadingMaxLevel = 2
 
         enum CodingKeys: String, CodingKey {
             case autoAssign = "auto_assign"
+            case headingMaxLevel = "heading_max_level"
         }
 
-        init(autoAssign: Bool = false) {
+        init(
+            autoAssign: Bool = false,
+            headingMaxLevel: Int = defaultHeadingMaxLevel
+        ) {
             self.autoAssign = autoAssign
+            self.headingMaxLevel = Self.clampHeadingMaxLevel(headingMaxLevel)
         }
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             autoAssign = try container.decodeIfPresent(Bool.self, forKey: .autoAssign) ?? false
+            let rawMax = try container.decodeIfPresent(Int.self, forKey: .headingMaxLevel)
+                ?? Self.defaultHeadingMaxLevel
+            headingMaxLevel = Self.clampHeadingMaxLevel(rawMax)
+        }
+
+        /// Clamp configured max into **1…6** (IDs cannot be fully disabled via 0; use assign sparingly instead).
+        static func clampHeadingMaxLevel(_ value: Int) -> Int {
+            min(max(value, minHeadingLevel), absoluteMaxHeadingLevel)
         }
     }
 

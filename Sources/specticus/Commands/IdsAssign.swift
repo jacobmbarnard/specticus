@@ -4,7 +4,7 @@ struct IdsAssign: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "assign",
         abstract: "Assign missing stable IDs to document headers.",
-        discussion: "IDs are simple (BR1, BR2, TS1, ...). Must be unique. Detects content drift (an existing ID's heading text has changed). See GitHub issue #6 for full requirements."
+        discussion: "IDs are simple (BR1, BR2, TS1, ...). Must be unique. Detects content drift (an existing ID's heading text has changed). By default only H1–H2 may own IDs; configure ids.heading_max_level (1…6) in .specticus/config.yml (#32). See GitHub issue #6 for full requirements."
     )
 
     @Flag(name: .shortAndLong, help: "Preview changes without writing files")
