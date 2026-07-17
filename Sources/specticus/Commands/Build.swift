@@ -116,6 +116,40 @@ struct Build: ParsableCommand {
             print("(Diagrams skipped as requested)")
         }
 
+        // Traceability checks (#6 / #36): warn on drift and disallowed Markdown in headings.
+        // Build still succeeds; assign/lint treat these as stronger problems.
+        do {
+            let headings = try IdsManager.collectHeadings(project: project)
+            let store = IdsManager.loadStore(from: project.idsURL)
+            let sensitivity = project.config.ids.driftSensitivity
+            let drifts = IdsManager.findContentDrifts(
+                headings: headings,
+                store: store,
+                sensitivity: sensitivity
+            )
+            let mdFindings = IdsManager.findMarkdownFormattedHeadings(in: headings)
+
+            if !mdFindings.isEmpty {
+                print("⚠️  \(mdFindings.count) heading(s) contain disallowed Markdown formatting (#36). Use plain text in headings.")
+                for m in mdFindings.prefix(5) {
+                    print("   \(m.file):\(m.lineIndex + 1): \(m.title)")
+                }
+            }
+            if !drifts.isEmpty {
+                print("⚠️  \(drifts.count) ID content drift(s) detected (mode=\(sensitivity.rawValue)):")
+                for d in drifts.prefix(8) {
+                    print("   \(d.id):")
+                    print("     was: \(d.oldContent)")
+                    print("     now: \(d.newContent)  (\(d.file))")
+                }
+                if drifts.count > 8 {
+                    print("   … and \(drifts.count - 8) more")
+                }
+            }
+        } catch {
+            print("⚠️  Could not validate traceability IDs during build: \(error.localizedDescription)")
+        }
+
         if project.config.ids.autoAssign {
             print("ℹ️  ids.auto_assign enabled — running `ids assign` automatically (see #6).")
             do {
