@@ -41,3 +41,6 @@ ids:
   # Default 2 = H1 and H2 only. Raise to 3…6 to include deeper headings (e.g. nested test cases).
   # Independent of build.heading_number_max_level (#4) and toc_max_level (#12).
   heading_max_level: 2
+  # Counter policy (#33): new IDs always use (per-prefix max) + 1. Numbers are never reused.
+  # Gaps after deleted requirements are intentional; orphaned entries in ids.json still reserve
+  # their numbers for traceability. There is no gap-fill or renumber mode.

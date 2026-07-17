@@ -1278,3 +1278,169 @@ comment block
     #expect(lines.contains { $0.hasPrefix("## BR") && $0.contains("Offline Mode") })
     #expect(lines.contains("## BR1: User Login"))
 }
+
+// MARK: - Counter strategy max+1 never reuse (#33)
+
+@Test func counterHighWaterMarkUsesBindingsAndCounters() {
+    var store = IdsManager.IdStore()
+    store.counters["BR"] = 2
+    store.bindings["BR1"] = "One"
+    store.bindings["BR5"] = "Orphan five" // higher than counter
+    store.bindings["TS3"] = "Other prefix"
+
+    #expect(IdsManager.highWaterMark(for: "BR", store: store) == 5)
+    #expect(IdsManager.highWaterMark(for: "TS", store: store) == 3)
+    #expect(IdsManager.highWaterMark(for: "UC", store: store) == 0)
+
+    let nextBR = IdsManager.allocateNextID(prefix: "BR", store: &store)
+    #expect(nextBR == "BR6")
+    #expect(store.counters["BR"] == 6)
+
+    let nextTS = IdsManager.allocateNextID(prefix: "TS", store: &store)
+    #expect(nextTS == "TS4")
+    #expect(store.counters["TS"] == 4)
+    // BR counter untouched by TS allocation
+    #expect(store.counters["BR"] == 6)
+}
+
+@Test func counterNeverReusesGapInLiveMarkdown() throws {
+    // BR1 and BR3 present; BR2 missing → new IDs must be > 3, never BR2.
+    // (H1 may also receive a BR via sibling context under #32; policy is still max+1.)
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-id-gap-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-section.md")
+    try """
+# Overview
+## BR1: First
+## BR3: Third
+## Offline Mode requirement
+""".write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    try IdsManager.assignIDs(project: project, dryRun: false)
+
+    let rewritten = try String(contentsOf: mdURL, encoding: .utf8)
+    let lines = rewritten.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    #expect(lines.contains("## BR1: First"))
+    #expect(lines.contains("## BR3: Third"))
+    #expect(lines.contains { $0.hasPrefix("## BR") && $0.contains("Offline Mode requirement") })
+    // Gap BR2 must never be filled
+    #expect(!rewritten.contains("BR2:"))
+    let offlineNum = lines
+        .first { $0.contains("Offline Mode requirement") }
+        .flatMap { line -> Int? in
+            guard let r = line.range(of: #"BR(\d+)"#, options: .regularExpression) else { return nil }
+            return Int(line[r].dropFirst(2))
+        }
+    #expect(offlineNum != nil)
+    #expect((offlineNum ?? 0) >= 4)
+}
+
+@Test func counterOrphanBindingReservesNumber() throws {
+    // Orphan BR2 in ids.json (no longer in Markdown) must not be reissued.
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-id-orphan-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-section.md")
+    try """
+# Overview
+## BR1: Still Live
+## New Requirement
+""".write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+    try """
+    {
+      "version": 1,
+      "counters": { "BR": 2 },
+      "bindings": {
+        "BR1": "Still Live",
+        "BR2": "Deleted requirement kept for history"
+      }
+    }
+    """.write(to: specticusDir.appendingPathComponent("ids.json"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    try IdsManager.assignIDs(project: project, dryRun: false)
+
+    let rewritten = try String(contentsOf: mdURL, encoding: .utf8)
+    let lines = rewritten.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    #expect(lines.contains { $0.contains("New Requirement") && $0.contains("BR") })
+    #expect(!rewritten.contains("BR2: New Requirement"))
+    #expect(!rewritten.contains("## BR2:"))
+
+    let store = IdsManager.loadStore(from: project.idsURL)
+    #expect(store.bindings["BR2"] == "Deleted requirement kept for history")
+    #expect(store.counters["BR"] ?? 0 >= 3)
+    // The new requirement binding must use a number > 2
+    let newBinding = store.bindings.first { $0.value == "New Requirement" }
+    #expect(newBinding != nil)
+    #expect(newBinding?.key != "BR2")
+    if let key = newBinding?.key, let num = Int(key.dropFirst(2)) {
+        #expect(num >= 3)
+    }
+}
+
+@Test func counterTrustsHighStaleCounterOverGaps() throws {
+    // counters.BR = 10 even if only BR1 is live → new IDs are > 10, never fill 2…9.
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-id-stale-counter-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-section.md")
+    try """
+# Overview
+## BR1: Only Live
+## Another requirement item
+""".write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+    try """
+    {
+      "version": 1,
+      "counters": { "BR": 10 },
+      "bindings": { "BR1": "Only Live" }
+    }
+    """.write(to: specticusDir.appendingPathComponent("ids.json"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    try IdsManager.assignIDs(project: project, dryRun: false)
+
+    let rewritten = try String(contentsOf: mdURL, encoding: .utf8)
+    let lines = rewritten.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    #expect(lines.contains { $0.hasPrefix("## BR") && $0.contains("Another requirement item") })
+    #expect(!rewritten.contains("## BR2:"))
+    let itemNum = lines
+        .first { $0.contains("Another requirement item") }
+        .flatMap { line -> Int? in
+            guard let r = line.range(of: #"BR(\d+)"#, options: .regularExpression) else { return nil }
+            return Int(line[r].dropFirst(2))
+        }
+    #expect((itemNum ?? 0) >= 11)
+}
+
+@Test func counterPrefixesAreIndependent() throws {
+    var store = IdsManager.IdStore()
+    store.bindings["BR3"] = "b"
+    store.bindings["TS1"] = "t"
+    #expect(IdsManager.allocateNextID(prefix: "BR", store: &store) == "BR4")
+    #expect(IdsManager.allocateNextID(prefix: "TS", store: &store) == "TS2")
+    #expect(IdsManager.allocateNextID(prefix: "UC", store: &store) == "UC1")
+}
