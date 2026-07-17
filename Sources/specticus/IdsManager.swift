@@ -5,13 +5,20 @@ import Foundation
 // IDs are simple form: BR1, TS2, ADR3, etc. (prefix + integer, no dash, no padding).
 // Stored with counters and verbatim content bindings in .specticus/ids.json
 // Disjoint from heading numbering (#4).
+//
+// Counter policy (#33): **monotonic per-prefix high-water mark; never reuse numbers.**
+// New IDs always use (max seen for that prefix) + 1. Gaps left by deleted or retired
+// requirements are intentional — orphaned entries in ids.json still reserve their numbers
+// for audit/traceability integrity. No renumbering and no gap-filling.
 
 enum IdsManager {
     static let knownPrefixes: [String] = ["BR", "TS", "UC", "ADR", "BDR", "TC", "BC", "REF", "DIAG", "REV"]
 
     struct IdStore: Codable, Equatable, Sendable {
         var version: Int = 1
+        /// Per-prefix high-water mark (largest number ever issued or observed). Never decreases (#33).
         var counters: [String: Int] = [:]   // e.g. "BR": 3
+        /// ID → descriptive content. Orphan bindings (ID not in Markdown) still reserve numbers (#33).
         var bindings: [String: String] = [:] // e.g. "BR1": "User Login"
     }
 
@@ -179,16 +186,17 @@ enum IdsManager {
         var headingsNeedingID: [HeadingInfo] = []
         var drifts: [(id: String, oldContent: String, newContent: String, file: String)] = []
 
+        // Raise high-water marks from any IDs already recorded in the store (including orphans).
+        // Deleted headings must not free their numbers for reuse (#33).
+        raiseHighWaterMarks(in: &store)
+
         // First pass: analyze existing IDs, update store counters/bindings, detect duplicates/drifts
         for h in headings {
             if let id = h.id {
                 idToInfos[id, default: []].append(h)
 
-                // update counters
-                if let prefix = prefixOf(id: id) {
-                    let num = numberOf(id: id)
-                    store.counters[prefix] = max(store.counters[prefix] ?? 0, num)
-                }
+                // Live IDs also raise the per-prefix high-water mark
+                noteObservedID(id, in: &store)
 
                 // drift check
                 if let bound = store.bindings[id], bound != h.content {
@@ -245,9 +253,8 @@ enum IdsManager {
                 }
                 continue
             }
-            let next = (store.counters[prefix] ?? 0) + 1
-            let newID = "\(prefix)\(next)"
-            store.counters[prefix] = next
+            // #33: always max+1 per prefix; never reuse gaps or orphaned numbers
+            let newID = allocateNextID(prefix: prefix, store: &store)
             store.bindings[newID] = h.content
             newlyAssigned.append((h, newID))
         }
@@ -511,6 +518,56 @@ enum IdsManager {
             return inferPrefixFromFilename(text)
         }
         return nil
+    }
+
+    // MARK: - Counter policy (#33)
+
+    /// Policy: **monotonic per-prefix high-water mark; never reuse.**
+    ///
+    /// When allocating a new ID for prefix `P`:
+    /// 1. Compute `high = max(store.counters[P], max number among bindings with prefix P)`.
+    /// 2. Issue `P(high + 1)` and set `counters[P] = high + 1`.
+    ///
+    /// Consequences (intentional):
+    /// - Deleting a heading leaves a **gap** (e.g. BR1, BR3 present → next is BR4, not BR2).
+    /// - Orphan bindings in `ids.json` (ID removed from Markdown but still recorded) **reserve**
+    ///   their numbers so historical references stay unambiguous.
+    /// - Counters never decrease; a stale high counter is trusted over gap-filling.
+    /// - Prefixes are independent (BR and TS counters do not interact).
+    ///
+    /// Non-goals: lowest-unused reuse, renumbering/compaction, configurable reuse modes.
+    static func highWaterMark(for prefix: String, store: IdStore) -> Int {
+        var high = store.counters[prefix] ?? 0
+        for id in store.bindings.keys {
+            guard let p = prefixOf(id: id), p == prefix else { continue }
+            high = max(high, numberOf(id: id))
+        }
+        return high
+    }
+
+    /// Raises `store.counters` so each known prefix is at least the max number in bindings.
+    private static func raiseHighWaterMarks(in store: inout IdStore) {
+        var raised: [String: Int] = store.counters
+        for id in store.bindings.keys {
+            guard let prefix = prefixOf(id: id) else { continue }
+            let num = numberOf(id: id)
+            raised[prefix] = max(raised[prefix] ?? 0, num)
+        }
+        store.counters = raised
+    }
+
+    /// Records an observed ID into the high-water mark (does not create bindings).
+    private static func noteObservedID(_ id: String, in store: inout IdStore) {
+        guard let prefix = prefixOf(id: id) else { return }
+        let num = numberOf(id: id)
+        store.counters[prefix] = max(store.counters[prefix] ?? 0, num)
+    }
+
+    /// Allocates the next ID for `prefix` using the #33 max+1 policy and advances the counter.
+    static func allocateNextID(prefix: String, store: inout IdStore) -> String {
+        let next = highWaterMark(for: prefix, store: store) + 1
+        store.counters[prefix] = next
+        return "\(prefix)\(next)"
     }
 
     private static func prefixOf(id: String) -> String? {
