@@ -162,6 +162,49 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         }
     }
 
+    /// How strictly heading text is compared to `ids.json` bindings when detecting content drift (#36).
+    ///
+    /// Config values (YAML `ids.drift_sensitivity`):
+    /// - `strict` (default) — any character difference is drift
+    /// - `contentStrict` — allow case changes and whitespace grow/shrink (not removal between tokens)
+    /// - `contentStrictPlus` — same as `contentStrict`, plus ignore punctuation/symbol differences
+    ///
+    /// Snake_case aliases `content_strict` / `content_strict_plus` are also accepted.
+    enum DriftSensitivity: String, Codable, Equatable, Sendable, CaseIterable {
+        case strict
+        case contentStrict
+        case contentStrictPlus
+
+        static let `default`: DriftSensitivity = .strict
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            let raw = try container.decode(String.self)
+            switch raw {
+            case "strict":
+                self = .strict
+            case "contentStrict", "content_strict":
+                self = .contentStrict
+            case "contentStrictPlus", "content_strict_plus":
+                self = .contentStrictPlus
+            default:
+                throw DecodingError.dataCorruptedError(
+                    in: container,
+                    debugDescription: "Unknown ids.drift_sensitivity '\(raw)'. Use strict, contentStrict, or contentStrictPlus."
+                )
+            }
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var c = encoder.singleValueContainer()
+            switch self {
+            case .strict: try c.encode("strict")
+            case .contentStrict: try c.encode("contentStrict")
+            case .contentStrictPlus: try c.encode("contentStrictPlus")
+            }
+        }
+    }
+
     struct IdsSection: Codable, Equatable, Sendable {
         /// When true, `ids assign` auto-assign behavior on build will run (see #6). IDs are simple BR1/TS2/ADR3 (no dash/padding).
         var autoAssign: Bool
@@ -169,6 +212,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         /// Levels **1…headingMaxLevel** are eligible (default **2** = H1+H2; max **6**).
         /// Completely disjoint from `build.heading_number_max_level` (#4) and TOC max (#12).
         var headingMaxLevel: Int
+        /// Drift comparison sensitivity (#36). Default **strict**.
+        var driftSensitivity: DriftSensitivity
 
         /// Minimum ATX level that can ever own an ID (always H1).
         static let minHeadingLevel = 1
@@ -180,14 +225,17 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         enum CodingKeys: String, CodingKey {
             case autoAssign = "auto_assign"
             case headingMaxLevel = "heading_max_level"
+            case driftSensitivity = "drift_sensitivity"
         }
 
         init(
             autoAssign: Bool = false,
-            headingMaxLevel: Int = defaultHeadingMaxLevel
+            headingMaxLevel: Int = defaultHeadingMaxLevel,
+            driftSensitivity: DriftSensitivity = .default
         ) {
             self.autoAssign = autoAssign
             self.headingMaxLevel = Self.clampHeadingMaxLevel(headingMaxLevel)
+            self.driftSensitivity = driftSensitivity
         }
 
         init(from decoder: Decoder) throws {
@@ -196,6 +244,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             let rawMax = try container.decodeIfPresent(Int.self, forKey: .headingMaxLevel)
                 ?? Self.defaultHeadingMaxLevel
             headingMaxLevel = Self.clampHeadingMaxLevel(rawMax)
+            driftSensitivity = try container.decodeIfPresent(DriftSensitivity.self, forKey: .driftSensitivity)
+                ?? .default
         }
 
         /// Clamp configured max into **1…6** (IDs cannot be fully disabled via 0; use assign sparingly instead).

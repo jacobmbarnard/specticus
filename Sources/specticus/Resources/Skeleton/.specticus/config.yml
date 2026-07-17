@@ -44,3 +44,10 @@ ids:
   # Counter policy (#33): new IDs always use (per-prefix max) + 1. Numbers are never reused.
   # Gaps after deleted requirements are intentional; orphaned entries in ids.json still reserve
   # their numbers for traceability. There is no gap-fill or renumber mode.
+  # Drift sensitivity (#36) when comparing heading text to ids.json bindings:
+  #   strict (default)     — any character change is drift
+  #   contentStrict        — allow case changes; whitespace may grow/shrink (not disappear)
+  #   contentStrictPlus    — same as contentStrict, plus ignore punctuation changes
+  # Snake_case aliases content_strict / content_strict_plus also accepted.
+  # Markdown formatting in headings (**bold**, *italic*, `code`, links, HTML) is never allowed.
+  drift_sensitivity: strict

@@ -175,16 +175,31 @@ enum IdsManager {
         return trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~")
     }
 
+    struct DriftFinding: Equatable, Sendable {
+        let id: String
+        let oldContent: String
+        let newContent: String
+        let file: String
+    }
+
+    struct MarkdownHeadingFinding: Equatable, Sendable {
+        let file: String
+        let lineIndex: Int
+        let title: String
+    }
+
     /// Main entry for `ids assign`.
     static func assignIDs(project: SpecticusProject, dryRun: Bool) throws {
         let storeURL = project.idsURL
         var store = loadStore(from: storeURL)
+        let sensitivity = project.config.ids.driftSensitivity
 
         let headings = try collectHeadings(project: project)
 
         var idToInfos: [String: [HeadingInfo]] = [:]
         var headingsNeedingID: [HeadingInfo] = []
-        var drifts: [(id: String, oldContent: String, newContent: String, file: String)] = []
+        var drifts: [DriftFinding] = []
+        var markdownHeadings: [MarkdownHeadingFinding] = []
 
         // Raise high-water marks from any IDs already recorded in the store (including orphans).
         // Deleted headings must not free their numbers for reuse (#33).
@@ -192,18 +207,35 @@ enum IdsManager {
 
         // First pass: analyze existing IDs, update store counters/bindings, detect duplicates/drifts
         for h in headings {
+            // #36: Markdown emphasis/links/code/HTML in heading titles is disallowed
+            let titleForMd = HeadingNumberer.stripOutlinePrefix(from: h.title)
+            if headingContainsDisallowedMarkdown(titleForMd) {
+                markdownHeadings.append(MarkdownHeadingFinding(
+                    file: h.file.lastPathComponent,
+                    lineIndex: h.lineIndex,
+                    title: titleForMd
+                ))
+            }
+
             if let id = h.id {
                 idToInfos[id, default: []].append(h)
 
                 // Live IDs also raise the per-prefix high-water mark
                 noteObservedID(id, in: &store)
 
-                // drift check
-                if let bound = store.bindings[id], bound != h.content {
-                    drifts.append((id: id, oldContent: bound, newContent: h.content, file: h.file.lastPathComponent))
+                // Drift check (#36) using configured sensitivity
+                if let bound = store.bindings[id],
+                   isContentDrift(bound: bound, current: h.content, sensitivity: sensitivity) {
+                    drifts.append(DriftFinding(
+                        id: id,
+                        oldContent: bound,
+                        newContent: h.content,
+                        file: h.file.lastPathComponent
+                    ))
                 }
 
-                // (re)bind
+                // (re)bind to current exact text when not drifting (or when first seen).
+                // On drift we still stage the rebind in memory but abort write below.
                 store.bindings[id] = h.content
             } else {
                 headingsNeedingID.append(h)
@@ -226,14 +258,27 @@ enum IdsManager {
             }
         }
 
+        if !markdownHeadings.isEmpty {
+            hasProblems = true
+            print("❌ Markdown formatting is not allowed in headings (#36):")
+            for m in markdownHeadings.prefix(20) {
+                print("   \(m.file):\(m.lineIndex + 1): \(m.title)")
+            }
+            if markdownHeadings.count > 20 {
+                print("   ... and \(markdownHeadings.count - 20) more")
+            }
+            print("   → Use plain text in headings (no **bold**, *italic*, `code`, [links](), or HTML).")
+        }
+
         if !drifts.isEmpty {
             hasProblems = true
-            print("⚠️  Content drift detected (ID kept but heading text changed):")
+            print("⚠️  Content drift detected (ID kept but heading text changed; mode=\(sensitivity.rawValue)):")
             for d in drifts {
                 print("   \(d.id):")
                 print("     was: \(d.oldContent)")
                 print("     now: \(d.newContent)  (\(d.file))")
             }
+            print("   → Revert the heading text, or update the binding deliberately after review (see #66 accept-drift).")
         }
 
         // Per-file context: if a file already owns IDs of one prefix family (e.g. TS1, TS2),
@@ -518,6 +563,127 @@ enum IdsManager {
             return inferPrefixFromFilename(text)
         }
         return nil
+    }
+
+    // MARK: - Drift comparison (#36)
+
+    /// Whether bound vs current heading text counts as content drift under `sensitivity`.
+    static func isContentDrift(
+        bound: String,
+        current: String,
+        sensitivity: SpecticusConfig.DriftSensitivity
+    ) -> Bool {
+        !contentsMatch(bound, current, sensitivity: sensitivity)
+    }
+
+    /// Compare two heading content strings according to #36 sensitivity rules.
+    static func contentsMatch(
+        _ a: String,
+        _ b: String,
+        sensitivity: SpecticusConfig.DriftSensitivity
+    ) -> Bool {
+        switch sensitivity {
+        case .strict:
+            // Utter strictness: any character difference is a change.
+            return a == b
+        case .contentStrict, .contentStrictPlus:
+            return normalizeForDriftComparison(a, sensitivity: sensitivity)
+                == normalizeForDriftComparison(b, sensitivity: sensitivity)
+        }
+    }
+
+    /// Normalizes text for non-strict drift comparison.
+    ///
+    /// - `contentStrict`: lowercases letters; collapses whitespace runs to a single space
+    ///   (whitespace may grow/shrink between tokens but not disappear so tokens merge).
+    /// - `contentStrictPlus`: same, then treats punctuation/symbols as whitespace (so they
+    ///   may change or vanish without counting as drift).
+    static func normalizeForDriftComparison(
+        _ text: String,
+        sensitivity: SpecticusConfig.DriftSensitivity
+    ) -> String {
+        switch sensitivity {
+        case .strict:
+            return text
+        case .contentStrict:
+            return collapseWhitespace(text.lowercased())
+        case .contentStrictPlus:
+            let lowered = text.lowercased()
+            var scalars: [UnicodeScalar] = []
+            scalars.reserveCapacity(lowered.unicodeScalars.count)
+            for s in lowered.unicodeScalars {
+                if CharacterSet.punctuationCharacters.contains(s)
+                    || CharacterSet.symbols.contains(s) {
+                    scalars.append(" ")
+                } else {
+                    scalars.append(s)
+                }
+            }
+            return collapseWhitespace(String(String.UnicodeScalarView(scalars)))
+        }
+    }
+
+    private static func collapseWhitespace(_ text: String) -> String {
+        text.split { $0.isWhitespace }.joined(separator: " ")
+    }
+
+    /// Detects Markdown/HTML formatting that must not appear in heading titles (#36).
+    ///
+    /// Flags: bold/italic markers, inline code, links/images, strikethrough, raw HTML tags.
+    static func headingContainsDisallowedMarkdown(_ title: String) -> Bool {
+        if title.contains("`") { return true }
+        // Bold **...** or __...__
+        if title.range(of: #"\*\*[^*]+\*\*"#, options: .regularExpression) != nil { return true }
+        if title.range(of: #"__[^_]+__"#, options: .regularExpression) != nil { return true }
+        // Italic *...* (not part of **)
+        if title.range(of: #"(?<!\*)\*(?!\*)([^*]+)\*(?!\*)"#, options: .regularExpression) != nil {
+            return true
+        }
+        // Italic _..._ (not part of __) — require word-ish boundaries via non-underscore interior
+        if title.range(of: #"(?<![A-Za-z0-9_])_([^_]+)_(?![A-Za-z0-9_])"#, options: .regularExpression) != nil {
+            return true
+        }
+        // Links / images [text](url) or ![alt](url)
+        if title.range(of: #"!?\[[^\]]*\]\([^)]+\)"#, options: .regularExpression) != nil { return true }
+        // Strikethrough
+        if title.range(of: #"~~[^~]+~~"#, options: .regularExpression) != nil { return true }
+        // Raw HTML tags
+        if title.range(of: #"</?[A-Za-z][^>]*>"#, options: .regularExpression) != nil { return true }
+        return false
+    }
+
+    /// Collect drift findings for lint/build using the project's configured sensitivity.
+    static func findContentDrifts(
+        headings: [HeadingInfo],
+        store: IdStore,
+        sensitivity: SpecticusConfig.DriftSensitivity
+    ) -> [DriftFinding] {
+        var findings: [DriftFinding] = []
+        for h in headings {
+            guard let id = h.id, let bound = store.bindings[id] else { continue }
+            if isContentDrift(bound: bound, current: h.content, sensitivity: sensitivity) {
+                findings.append(DriftFinding(
+                    id: id,
+                    oldContent: bound,
+                    newContent: h.content,
+                    file: h.file.lastPathComponent
+                ))
+            }
+        }
+        return findings
+    }
+
+    /// Headings (eligible for IDs) whose titles contain disallowed Markdown (#36).
+    static func findMarkdownFormattedHeadings(in headings: [HeadingInfo]) -> [MarkdownHeadingFinding] {
+        headings.compactMap { h in
+            let title = HeadingNumberer.stripOutlinePrefix(from: h.title)
+            guard headingContainsDisallowedMarkdown(title) else { return nil }
+            return MarkdownHeadingFinding(
+                file: h.file.lastPathComponent,
+                lineIndex: h.lineIndex,
+                title: title
+            )
+        }
     }
 
     // MARK: - Counter policy (#33)

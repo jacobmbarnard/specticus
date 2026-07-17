@@ -164,19 +164,16 @@ struct Lint: ParsableCommand {
                  suggestion: "Run with a specific --input or ensure numbered .md files (or welcome-template.md) are present and readable. Error: \(error.localizedDescription)")
         }
 
-        // --- Traceability IDs (#6)
+        // --- Traceability IDs (#6 / #36)
         do {
             let headings = try IdsManager.collectHeadings(project: project)
             var idToHeadings: [String: [IdsManager.HeadingInfo]] = [:]
-            var drifts = 0
             let store = IdsManager.loadStore(from: project.idsURL)
+            let sensitivity = project.config.ids.driftSensitivity
 
             for h in headings {
                 if let id = h.id {
                     idToHeadings[id, default: []].append(h)
-                    if let bound = store.bindings[id], bound != h.content {
-                        drifts += 1
-                    }
                 }
             }
 
@@ -188,11 +185,35 @@ struct Lint: ParsableCommand {
                 ok("No duplicate traceability IDs")
             }
 
-            if drifts > 0 {
-                warn("\(drifts) ID(s) with content drift (text changed but ID kept)",
-                     suggestion: "Run `specticus ids assign` (or fix manually) and re-lint.")
+            let mdFindings = IdsManager.findMarkdownFormattedHeadings(in: headings)
+            if !mdFindings.isEmpty {
+                fail("\(mdFindings.count) heading(s) contain disallowed Markdown formatting (#36)",
+                     suggestion: "Use plain text in headings (no **bold**, *italic*, `code`, [links](), or HTML).")
+                for m in mdFindings.prefix(5) {
+                    print("      e.g. \(m.file):\(m.lineIndex + 1): \(m.title)")
+                }
+            } else {
+                ok("No Markdown formatting in ID-eligible headings")
+            }
+
+            let drifts = IdsManager.findContentDrifts(
+                headings: headings,
+                store: store,
+                sensitivity: sensitivity
+            )
+            if !drifts.isEmpty {
+                warn("\(drifts.count) ID(s) with content drift (mode=\(sensitivity.rawValue))",
+                     suggestion: "Review old vs new text below; fix the heading or accept deliberately (see #66).")
+                for d in drifts.prefix(8) {
+                    print("      \(d.id):")
+                    print("        was: \(d.oldContent)")
+                    print("        now: \(d.newContent)  (\(d.file))")
+                }
+                if drifts.count > 8 {
+                    print("      … and \(drifts.count - 8) more")
+                }
             } else if !store.bindings.isEmpty {
-                ok("No ID content drift detected (checked \(store.bindings.count) bound ID(s))")
+                ok("No ID content drift detected (mode=\(sensitivity.rawValue); checked \(store.bindings.count) bound ID(s))")
             }
         } catch {
             warn("Could not fully validate traceability IDs: \(error.localizedDescription)")
@@ -202,7 +223,7 @@ struct Lint: ParsableCommand {
         print("\n  ℹ️  External tools:")
         print("      • Mermaid diagrams: rendered client-side in the output HTML (no CLI tool required).")
         print("      • For advanced Mermaid CLI rendering you can optionally install @mermaid-js/mermaid-cli.")
-        print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, asset copy, diagrams, build tracking (#8), and ID traceability settings (#6: BR1, TS2, etc.; #32: ids.heading_max_level default H1–H2; #33: per-prefix max+1, never reuse). Lint will enforce ID uniqueness and content drift detection.")
+        print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, asset copy, diagrams, build tracking (#8), and ID traceability settings (#6; #32 heading levels; #33 counters; #36 drift_sensitivity). Lint enforces ID uniqueness, drift, and plain-text headings.")
         if project.hasSpecticusDirectory {
             if FileManager.default.fileExists(atPath: project.buildNumberURL.path) {
                 if let record = try? BuildTracker.load(from: project.buildNumberURL) {

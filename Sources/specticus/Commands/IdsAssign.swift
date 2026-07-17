@@ -6,9 +6,9 @@ struct IdsAssign: ParsableCommand {
         abstract: "Assign missing stable IDs to document headers.",
         discussion: """
             IDs are simple (BR1, BR2, TS1, ...). Must be unique. Detects content drift \
-            (an existing ID's heading text has changed). By default only H1–H2 may own IDs; \
-            configure ids.heading_max_level (1…6) in .specticus/config.yml (#32). \
-            New numbers are always (per-prefix max)+1 and never reused — gaps are intentional (#33). \
+            (heading text vs ids.json; sensitivity via ids.drift_sensitivity, default strict — #36). \
+            Rejects Markdown formatting in headings. By default only H1–H2 may own IDs \
+            (ids.heading_max_level, #32). New numbers are (per-prefix max)+1, never reused (#33). \
             See GitHub issue #6 for full requirements.
             """
     )

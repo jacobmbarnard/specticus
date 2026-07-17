@@ -73,6 +73,7 @@ import Foundation
     ids:
       auto_assign: true
       heading_max_level: 4
+      drift_sensitivity: contentStrict
     """
     let config = try SpecticusConfig.parse(yaml: yaml)
     #expect(config.version == 1)
@@ -87,6 +88,7 @@ import Foundation
     #expect(config.decisionRecords.bdrsEnabled == false)
     #expect(config.ids.autoAssign == true)
     #expect(config.ids.headingMaxLevel == 4)
+    #expect(config.ids.driftSensitivity == .contentStrict)
 }
 
 @Test func configPartialYAMLUsesDefaults() throws {
@@ -106,6 +108,7 @@ import Foundation
     #expect(config.ids.autoAssign == false)
     #expect(config.ids.headingMaxLevel == SpecticusConfig.IdsSection.defaultHeadingMaxLevel)
     #expect(config.ids.headingMaxLevel == 2)
+    #expect(config.ids.driftSensitivity == .strict)
 }
 
 @Test func projectLoadUsesConfigAndTitle() throws {
@@ -1443,4 +1446,197 @@ comment block
     #expect(IdsManager.allocateNextID(prefix: "BR", store: &store) == "BR4")
     #expect(IdsManager.allocateNextID(prefix: "TS", store: &store) == "TS2")
     #expect(IdsManager.allocateNextID(prefix: "UC", store: &store) == "UC1")
+}
+
+// MARK: - Drift sensitivity & plain-text headings (#36)
+
+@Test func driftSensitivityConfigParsesAliases() throws {
+    let camel = try SpecticusConfig.parse(yaml: """
+    ids:
+      drift_sensitivity: contentStrictPlus
+    """)
+    #expect(camel.ids.driftSensitivity == .contentStrictPlus)
+
+    let snake = try SpecticusConfig.parse(yaml: """
+    ids:
+      drift_sensitivity: content_strict
+    """)
+    #expect(snake.ids.driftSensitivity == .contentStrict)
+
+    let strict = try SpecticusConfig.parse(yaml: """
+    ids:
+      drift_sensitivity: strict
+    """)
+    #expect(strict.ids.driftSensitivity == .strict)
+}
+
+@Test func driftStrictDetectsAnyCharacterChange() {
+    #expect(IdsManager.contentsMatch("User Login", "User Login", sensitivity: .strict))
+    #expect(!IdsManager.contentsMatch("User Login", "user login", sensitivity: .strict))
+    #expect(!IdsManager.contentsMatch("User Login", "User  Login", sensitivity: .strict))
+    #expect(!IdsManager.contentsMatch("User Login", "User Login!", sensitivity: .strict))
+    #expect(IdsManager.isContentDrift(bound: "A", current: "A ", sensitivity: .strict))
+}
+
+@Test func driftContentStrictAllowsCaseAndWhitespaceGrowShrink() {
+    // Case
+    #expect(IdsManager.contentsMatch("User Login", "user login", sensitivity: .contentStrict))
+    #expect(IdsManager.contentsMatch("USER LOGIN", "User Login", sensitivity: .contentStrict))
+    // Whitespace grow/shrink (not disappear)
+    #expect(IdsManager.contentsMatch("User Login", "User  Login", sensitivity: .contentStrict))
+    #expect(IdsManager.contentsMatch("  User Login  ", "User Login", sensitivity: .contentStrict))
+    // Whitespace disappearance (tokens merge) is still drift
+    #expect(!IdsManager.contentsMatch("User Login", "UserLogin", sensitivity: .contentStrict))
+    // Wording change is drift
+    #expect(!IdsManager.contentsMatch("User Login", "User Logout", sensitivity: .contentStrict))
+    // Punctuation still matters under contentStrict
+    #expect(!IdsManager.contentsMatch("User Login", "User Login!", sensitivity: .contentStrict))
+}
+
+@Test func driftContentStrictPlusAllowsPunctuationChanges() {
+    #expect(IdsManager.contentsMatch("User Login", "User Login!", sensitivity: .contentStrictPlus))
+    #expect(IdsManager.contentsMatch("User Login", "User-Login", sensitivity: .contentStrictPlus))
+    #expect(IdsManager.contentsMatch("User Login?", "user  login", sensitivity: .contentStrictPlus))
+    // Semantic word change still drift
+    #expect(!IdsManager.contentsMatch("User Login", "User Logout", sensitivity: .contentStrictPlus))
+    #expect(!IdsManager.contentsMatch("User Login", "UserLogin", sensitivity: .contentStrictPlus))
+}
+
+@Test func headingMarkdownFormattingIsDetected() {
+    #expect(IdsManager.headingContainsDisallowedMarkdown("**Bold Title**"))
+    #expect(IdsManager.headingContainsDisallowedMarkdown("Use `code` here"))
+    #expect(IdsManager.headingContainsDisallowedMarkdown("See [docs](https://example.com)"))
+    #expect(IdsManager.headingContainsDisallowedMarkdown("Hello <em>world</em>"))
+    #expect(IdsManager.headingContainsDisallowedMarkdown("~~old~~ new"))
+    #expect(IdsManager.headingContainsDisallowedMarkdown("*italic title*"))
+    #expect(!IdsManager.headingContainsDisallowedMarkdown("Plain User Login"))
+    #expect(!IdsManager.headingContainsDisallowedMarkdown("BR1: User Login"))
+    // Underscores in ordinary words should not false-positive as italic
+    #expect(!IdsManager.headingContainsDisallowedMarkdown("snake_case_identifier"))
+}
+
+@Test func idsAssignDetectsDriftUnderStrictMode() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-drift-strict-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-section.md")
+    try """
+# Overview
+## BR1: user login
+""".write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try """
+    version: 1
+    ids:
+      drift_sensitivity: strict
+    """.write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+    try """
+    {
+      "version": 1,
+      "counters": { "BR": 1 },
+      "bindings": { "BR1": "User Login" }
+    }
+    """.write(to: specticusDir.appendingPathComponent("ids.json"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let headings = try IdsManager.collectHeadings(project: project)
+    let drifts = IdsManager.findContentDrifts(
+        headings: headings,
+        store: IdsManager.loadStore(from: project.idsURL),
+        sensitivity: .strict
+    )
+    #expect(drifts.count == 1)
+    #expect(drifts[0].id == "BR1")
+    #expect(drifts[0].oldContent == "User Login")
+    #expect(drifts[0].newContent == "user login")
+
+    // Assign must not rewrite store when drift blocks
+    try IdsManager.assignIDs(project: project, dryRun: false)
+    let storeAfter = IdsManager.loadStore(from: project.idsURL)
+    #expect(storeAfter.bindings["BR1"] == "User Login")
+}
+
+@Test func idsAssignContentStrictIgnoresCaseOnlyChange() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-drift-cs-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-section.md")
+    try """
+# Overview
+## BR1: user login
+""".write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try """
+    version: 1
+    ids:
+      drift_sensitivity: contentStrict
+    """.write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+    try """
+    {
+      "version": 1,
+      "counters": { "BR": 1 },
+      "bindings": { "BR1": "User Login" }
+    }
+    """.write(to: specticusDir.appendingPathComponent("ids.json"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let drifts = IdsManager.findContentDrifts(
+        headings: try IdsManager.collectHeadings(project: project),
+        store: IdsManager.loadStore(from: project.idsURL),
+        sensitivity: project.config.ids.driftSensitivity
+    )
+    #expect(drifts.isEmpty)
+
+    try IdsManager.assignIDs(project: project, dryRun: false)
+    let storeAfter = IdsManager.loadStore(from: project.idsURL)
+    // Binding syncs to current exact heading text when not drifting
+    #expect(storeAfter.bindings["BR1"] == "user login")
+}
+
+@Test func idsAssignBlocksMarkdownInHeadings() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-md-heading-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-section.md")
+    try """
+# Overview
+## BR1: **User Login**
+## New requirement item
+""".write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+    try """
+    {
+      "version": 1,
+      "counters": { "BR": 1 },
+      "bindings": { "BR1": "**User Login**" }
+    }
+    """.write(to: specticusDir.appendingPathComponent("ids.json"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let mdFindings = IdsManager.findMarkdownFormattedHeadings(
+        in: try IdsManager.collectHeadings(project: project)
+    )
+    #expect(!mdFindings.isEmpty)
+
+    try IdsManager.assignIDs(project: project, dryRun: false)
+    // Must not assign new IDs while markdown problems exist
+    let rewritten = try String(contentsOf: mdURL, encoding: .utf8)
+    #expect(rewritten.contains("## New requirement item"))
+    #expect(!rewritten.contains("## BR2:"))
 }
