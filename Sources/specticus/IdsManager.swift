@@ -581,11 +581,13 @@ enum IdsManager {
             throw AcceptDriftError.auditWriteFailed(message: "could not encode audit line as UTF-8")
         }
 
+        // Read-modify-write keeps us off newer FileHandle APIs that require a higher
+        // macOS deployment target than the package declares (CI builds on macOS).
+        // Audit logs stay small; atomic rewrite is appropriate and portable.
         if fm.fileExists(atPath: url.path) {
-            let handle = try FileHandle(forWritingTo: url)
-            defer { try? handle.close() }
-            try handle.seekToEnd()
-            try handle.write(contentsOf: lineData)
+            var combined = try Data(contentsOf: url)
+            combined.append(lineData)
+            try combined.write(to: url, options: .atomic)
         } else {
             try lineData.write(to: url, options: .atomic)
         }
