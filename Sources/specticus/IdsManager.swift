@@ -278,7 +278,8 @@ enum IdsManager {
                 print("     was: \(d.oldContent)")
                 print("     now: \(d.newContent)  (\(d.file))")
             }
-            print("   → Revert the heading text, or update the binding deliberately after review (see #66 accept-drift).")
+            print("   → Revert the heading text, or after review rebind one ID at a time:")
+            print("      specticus ids accept-drift <ID>   (same identity / reword only — #66)")
         }
 
         // Per-file context: if a file already owns IDs of one prefix family (e.g. TS1, TS2),
@@ -374,6 +375,261 @@ enum IdsManager {
 
         try saveStore(store, to: storeURL)
         print("💾 Updated \(storeURL.lastPathComponent)")
+    }
+
+    // MARK: - Accept drift (#66)
+
+    /// Structured audit event for deliberate ID rebinds. Appended as one JSON line to
+    /// `.specticus/ids-audit.jsonl` (never rewritten in place).
+    struct AuditEvent: Codable, Equatable, Sendable {
+        var timestamp: String
+        var event: String
+        var id: String
+        var oldContent: String
+        var newContent: String
+        var source: String
+        var actor: String
+        var note: String?
+
+        enum CodingKeys: String, CodingKey {
+            case timestamp
+            case event
+            case id
+            case oldContent = "old_content"
+            case newContent = "new_content"
+            case source
+            case actor
+            case note
+        }
+    }
+
+    /// Result of a successful `ids accept-drift`.
+    struct AcceptDriftResult: Equatable, Sendable {
+        let id: String
+        let oldContent: String
+        let newContent: String
+        let source: String
+        let actor: String
+        let note: String?
+        let auditURL: URL
+        let storeURL: URL
+    }
+
+    /// Failure modes for `acceptDrift`. Callers map these to user-facing errors / non-zero exit.
+    enum AcceptDriftError: Error, Equatable, CustomStringConvertible, LocalizedError {
+        case notInStore(id: String)
+        case notInMarkdown(id: String)
+        case duplicateClaims(id: String, locations: [String])
+        case noDrift(id: String, content: String)
+        case auditWriteFailed(message: String)
+        case storeWriteFailed(message: String)
+
+        var description: String {
+            switch self {
+            case .notInStore(let id):
+                return "ID \(id) is not present in .specticus/ids.json bindings. Nothing to rebind."
+            case .notInMarkdown(let id):
+                return "ID \(id) is not claimed by any eligible heading in Markdown. Cannot accept drift for an orphan binding."
+            case .duplicateClaims(let id, let locations):
+                let locs = locations.joined(separator: ", ")
+                return "ID \(id) is claimed by multiple headings (\(locs)). Resolve the duplicate before accept-drift; do not use accept-drift to merge duplicates."
+            case .noDrift(let id, let content):
+                return "ID \(id) has no content drift under the current sensitivity (bound text already matches: \"\(content)\"). No changes made."
+            case .auditWriteFailed(let message):
+                return "Failed to write audit log (binding not updated — fail closed): \(message)"
+            case .storeWriteFailed(let message):
+                return "Failed to update ids.json after audit log write: \(message)"
+            }
+        }
+
+        var errorDescription: String? { description }
+    }
+
+    /// Explicitly rebind a single ID’s stored content to the current heading text after review.
+    ///
+    /// This is **accept-drift**, not reassignment:
+    /// - Updates only `ids.json` bindings for `<id>`
+    /// - Never rewrites the Markdown ID token
+    /// - Never mints, renumbers, reuses, or bulk-accepts other IDs
+    /// - Requires true drift under `ids.drift_sensitivity` (#36)
+    /// - Requires a durable audit log entry; if the log cannot be written, the binding is not updated
+    ///
+    /// - Parameters:
+    ///   - project: Loaded project (paths + config).
+    ///   - id: Traceability ID (e.g. `BR1`).
+    ///   - note: Optional human reason stored in the audit entry (`--note`).
+    ///   - actor: Optional override for the audit actor (defaults to `$USER` / `$LOGNAME` / `"unknown"`).
+    ///   - auditURL: Optional override for the audit log path (tests / fail-closed simulation).
+    ///   - storeURL: Optional override for `ids.json` path.
+    ///   - now: Optional clock for deterministic timestamps in tests.
+    @discardableResult
+    static func acceptDrift(
+        project: SpecticusProject,
+        id rawID: String,
+        note: String? = nil,
+        actor: String? = nil,
+        auditURL: URL? = nil,
+        storeURL: URL? = nil,
+        now: Date = Date()
+    ) throws -> AcceptDriftResult {
+        let id = rawID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedStoreURL = storeURL ?? project.idsURL
+        let resolvedAuditURL = auditURL ?? project.idsAuditURL
+        let sensitivity = project.config.ids.driftSensitivity
+        let resolvedActor = actor ?? currentActor()
+        let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let noteValue = (trimmedNote?.isEmpty == false) ? trimmedNote : nil
+
+        var store = loadStore(from: resolvedStoreURL)
+
+        guard let oldContent = store.bindings[id] else {
+            throw AcceptDriftError.notInStore(id: id)
+        }
+
+        let headings = try collectHeadings(project: project)
+        let claims = headings.filter { $0.id == id }
+
+        if claims.isEmpty {
+            throw AcceptDriftError.notInMarkdown(id: id)
+        }
+        if claims.count > 1 {
+            let locations = claims.map { "\($0.file.lastPathComponent):\($0.lineIndex + 1)" }
+            throw AcceptDriftError.duplicateClaims(id: id, locations: locations)
+        }
+
+        let heading = claims[0]
+        let newContent = heading.content
+        let source = "\(heading.file.lastPathComponent):\(heading.lineIndex + 1)"
+
+        // True drift only — same comparison rules as assign/lint (#36).
+        guard isContentDrift(bound: oldContent, current: newContent, sensitivity: sensitivity) else {
+            throw AcceptDriftError.noDrift(id: id, content: oldContent)
+        }
+
+        let event = AuditEvent(
+            timestamp: iso8601UTCString(from: now),
+            event: "accept-drift",
+            id: id,
+            oldContent: oldContent,
+            newContent: newContent,
+            source: source,
+            actor: resolvedActor,
+            note: noteValue
+        )
+
+        // Fail closed: binding update must not commit if the audit log cannot be written.
+        do {
+            try appendAuditEvent(event, to: resolvedAuditURL)
+        } catch let err as AcceptDriftError {
+            throw err
+        } catch {
+            throw AcceptDriftError.auditWriteFailed(message: error.localizedDescription)
+        }
+
+        store.bindings[id] = newContent
+        do {
+            try saveStore(store, to: resolvedStoreURL)
+        } catch let err as AcceptDriftError {
+            throw err
+        } catch {
+            throw AcceptDriftError.storeWriteFailed(message: error.localizedDescription)
+        }
+
+        print("✅ Accepted drift for \(id) (mode=\(sensitivity.rawValue))")
+        print("   was: \(oldContent)")
+        print("   now: \(newContent)  (\(source))")
+        print("📝 Appended audit entry to \(resolvedAuditURL.lastPathComponent)")
+        print("💾 Updated \(resolvedStoreURL.lastPathComponent)")
+        print("   Note: accept-drift is for same-identity rewording only — not new requirements or ID reuse.")
+
+        return AcceptDriftResult(
+            id: id,
+            oldContent: oldContent,
+            newContent: newContent,
+            source: source,
+            actor: resolvedActor,
+            note: noteValue,
+            auditURL: resolvedAuditURL,
+            storeURL: resolvedStoreURL
+        )
+    }
+
+    /// Appends one JSON object as a single line to the audit log (creates parent dir / file as needed).
+    static func appendAuditEvent(_ event: AuditEvent, to url: URL) throws {
+        let fm = FileManager.default
+        let dir = url.deletingLastPathComponent()
+        if !fm.fileExists(atPath: dir.path) {
+            try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+
+        // Refuse to clobber a directory or other non-file at the audit path.
+        var isDir: ObjCBool = false
+        if fm.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue {
+            throw AcceptDriftError.auditWriteFailed(
+                message: "\(url.lastPathComponent) exists and is a directory"
+            )
+        }
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let data = try encoder.encode(event)
+        guard var line = String(data: data, encoding: .utf8) else {
+            throw AcceptDriftError.auditWriteFailed(message: "could not encode audit event as UTF-8")
+        }
+        line.append("\n")
+        guard let lineData = line.data(using: .utf8) else {
+            throw AcceptDriftError.auditWriteFailed(message: "could not encode audit line as UTF-8")
+        }
+
+        // Read-modify-write keeps us off newer FileHandle APIs that require a higher
+        // macOS deployment target than the package declares (CI builds on macOS).
+        // Audit logs stay small; atomic rewrite is appropriate and portable.
+        if fm.fileExists(atPath: url.path) {
+            var combined = try Data(contentsOf: url)
+            combined.append(lineData)
+            try combined.write(to: url, options: .atomic)
+        } else {
+            try lineData.write(to: url, options: .atomic)
+        }
+    }
+
+    /// Loads all audit events from a JSONL file (skips blank lines). Used by tests and tooling.
+    static func loadAuditEvents(from url: URL) throws -> [AuditEvent] {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: url.path) else { return [] }
+        let text = try String(contentsOf: url, encoding: .utf8)
+        let decoder = JSONDecoder()
+        var events: [AuditEvent] = []
+        for (idx, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { continue }
+            do {
+                let data = Data(trimmed.utf8)
+                events.append(try decoder.decode(AuditEvent.self, from: data))
+            } catch {
+                throw AcceptDriftError.auditWriteFailed(
+                    message: "malformed audit log line \(idx + 1): \(error.localizedDescription)"
+                )
+            }
+        }
+        return events
+    }
+
+    private static func currentActor() -> String {
+        if let user = ProcessInfo.processInfo.environment["USER"], !user.isEmpty {
+            return user
+        }
+        if let logname = ProcessInfo.processInfo.environment["LOGNAME"], !logname.isEmpty {
+            return logname
+        }
+        return "unknown"
+    }
+
+    private static func iso8601UTCString(from date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        return formatter.string(from: date)
     }
 
     // MARK: - Helpers

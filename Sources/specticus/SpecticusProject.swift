@@ -27,6 +27,8 @@ struct SpecticusProject: Sendable {
     static let configFileName = "config.yml"
     static let titleFileName = "title.yml"
     static let idsFileName = "ids.json"  // stores BR1, TS2, ADR3 etc. (simple prefix+integer)
+    /// Append-only audit log for deliberate ID rebinds (`ids accept-drift`, #66).
+    static let idsAuditFileName = "ids-audit.jsonl"
     static let buildNumberFileName = "build-number.yml"
 
     var specticusDirectory: URL {
@@ -43,6 +45,10 @@ struct SpecticusProject: Sendable {
 
     var idsURL: URL {
         specticusDirectory.appendingPathComponent(Self.idsFileName)
+    }
+
+    var idsAuditURL: URL {
+        specticusDirectory.appendingPathComponent(Self.idsAuditFileName)
     }
 
     var buildNumberURL: URL {

@@ -47,18 +47,22 @@ specticus lint
 
 # Manage traceability IDs
 specticus ids assign
+
+# After review: rebind one drifted ID to its new heading text (same ID)
+specticus ids accept-drift BR1
 ```
 
 ## Commands
 
-| Command       | Description                              |
-|---------------|------------------------------------------|
-| `init`        | Initialize a new specticus project       |
-| `build`       | Generate HTML documentation              |
-| `lint`        | Validate structure and IDs               |
-| `clean`       | Remove generated output                  |
-| `ids assign`  | Assign missing traceability IDs          |
-| `ids`         | Manage traceability IDs (group command)  |
+| Command              | Description                                                      |
+|----------------------|------------------------------------------------------------------|
+| `init`               | Initialize a new specticus project                               |
+| `build`              | Generate HTML documentation                                      |
+| `lint`               | Validate structure and IDs                                       |
+| `clean`              | Remove generated output                                          |
+| `ids assign`         | Assign missing traceability IDs                                  |
+| `ids accept-drift`   | Accept content drift for one ID (same-identity reword + audit)   |
+| `ids`                | Manage traceability IDs (group command)                          |
 
 Run `specticus --help` or `specticus <command> --help` for details.
 
