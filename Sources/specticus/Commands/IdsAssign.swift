@@ -7,9 +7,10 @@ struct IdsAssign: ParsableCommand {
         discussion: """
             IDs are simple (BR1, BR2, TS1, ...). Must be unique. Detects content drift \
             (heading text vs ids.json; sensitivity via ids.drift_sensitivity, default strict — #36). \
-            Rejects Markdown formatting in headings. By default only H1–H2 may own IDs \
-            (ids.heading_max_level, #32). New numbers are (per-prefix max)+1, never reused (#33). \
-            See GitHub issue #6 for full requirements.
+            Never auto-accepts drift and never overwrites existing ID tokens. After review, rebind \
+            one ID at a time with `specticus ids accept-drift <ID>` (#66). Rejects Markdown \
+            formatting in headings. By default only H1–H2 may own IDs (ids.heading_max_level, #32). \
+            New numbers are (per-prefix max)+1, never reused (#33). See GitHub issue #6.
             """
     )
 

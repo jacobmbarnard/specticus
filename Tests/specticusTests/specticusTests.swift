@@ -1640,3 +1640,329 @@ comment block
     #expect(rewritten.contains("## New requirement item"))
     #expect(!rewritten.contains("## BR2:"))
 }
+
+// MARK: - ids accept-drift (#66)
+
+/// Shared fixture for accept-drift tests: one headed ID with a drifted binding under strict mode.
+private func makeAcceptDriftFixture(
+    markdownBody: String = """
+    # Overview
+    ## BR1: User authentication
+    """,
+    bindingsJSON: String = """
+    {
+      "version": 1,
+      "counters": { "BR": 1 },
+      "bindings": { "BR1": "User Login" }
+    }
+    """,
+    configYAML: String = """
+    version: 1
+    ids:
+      drift_sensitivity: strict
+    """
+) throws -> (tmp: URL, mdURL: URL, project: SpecticusProject) {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-accept-drift-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+
+    let mdURL = tmp.appendingPathComponent("007-business-requirements.md")
+    try markdownBody.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try configYAML.write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+    try bindingsJSON.write(to: specticusDir.appendingPathComponent("ids.json"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    return (tmp, mdURL, project)
+}
+
+@Test func acceptDriftHappyPathUpdatesBindingAndAuditLog() throws {
+    let fm = FileManager.default
+    let (tmp, mdURL, project) = try makeAcceptDriftFixture()
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdBefore = try String(contentsOf: mdURL, encoding: .utf8)
+    let fixedNow = Date(timeIntervalSince1970: 1_700_000_000) // fixed for stable timestamp
+
+    let result = try IdsManager.acceptDrift(
+        project: project,
+        id: "BR1",
+        note: "editorial rename under CR-42",
+        actor: "tester",
+        now: fixedNow
+    )
+
+    #expect(result.id == "BR1")
+    #expect(result.oldContent == "User Login")
+    #expect(result.newContent == "User authentication")
+    #expect(result.source.contains("007-business-requirements.md"))
+    #expect(result.actor == "tester")
+    #expect(result.note == "editorial rename under CR-42")
+
+    // Binding updated; other store fields preserved
+    let storeAfter = IdsManager.loadStore(from: project.idsURL)
+    #expect(storeAfter.bindings["BR1"] == "User authentication")
+    #expect(storeAfter.counters["BR"] == 1)
+
+    // Markdown ID token never rewritten
+    let mdAfter = try String(contentsOf: mdURL, encoding: .utf8)
+    #expect(mdAfter == mdBefore)
+    #expect(mdAfter.contains("## BR1: User authentication"))
+
+    // Durable audit log with required fields
+    let events = try IdsManager.loadAuditEvents(from: project.idsAuditURL)
+    #expect(events.count == 1)
+    #expect(events[0].event == "accept-drift")
+    #expect(events[0].id == "BR1")
+    #expect(events[0].oldContent == "User Login")
+    #expect(events[0].newContent == "User authentication")
+    #expect(events[0].actor == "tester")
+    #expect(events[0].note == "editorial rename under CR-42")
+    #expect(events[0].source.contains("007-business-requirements.md"))
+    #expect(events[0].timestamp.hasSuffix("Z") || events[0].timestamp.contains("+00:00"))
+
+    // No longer drifting after accept
+    let drifts = IdsManager.findContentDrifts(
+        headings: try IdsManager.collectHeadings(project: project),
+        store: storeAfter,
+        sensitivity: .strict
+    )
+    #expect(drifts.isEmpty)
+
+    // Assign may proceed without drift abort
+    try IdsManager.assignIDs(project: project, dryRun: false)
+    let storeAfterAssign = IdsManager.loadStore(from: project.idsURL)
+    #expect(storeAfterAssign.bindings["BR1"] == "User authentication")
+}
+
+@Test func acceptDriftNoOpWhenNoDrift() throws {
+    let fm = FileManager.default
+    let (tmp, _, project) = try makeAcceptDriftFixture(
+        markdownBody: """
+        # Overview
+        ## BR1: User Login
+        """,
+        bindingsJSON: """
+        {
+          "version": 1,
+          "counters": { "BR": 1 },
+          "bindings": { "BR1": "User Login" }
+        }
+        """
+    )
+    defer { try? fm.removeItem(at: tmp) }
+
+    var threw = false
+    do {
+        _ = try IdsManager.acceptDrift(project: project, id: "BR1", actor: "tester")
+    } catch let error as IdsManager.AcceptDriftError {
+        threw = true
+        guard case .noDrift(let id, let content) = error else {
+            Issue.record("Expected noDrift, got \(error)")
+            return
+        }
+        #expect(id == "BR1")
+        #expect(content == "User Login")
+    }
+    #expect(threw)
+
+    let storeAfter = IdsManager.loadStore(from: project.idsURL)
+    #expect(storeAfter.bindings["BR1"] == "User Login")
+    #expect(!fm.fileExists(atPath: project.idsAuditURL.path))
+}
+
+@Test func acceptDriftMissingIDInStore() throws {
+    let fm = FileManager.default
+    let (tmp, _, project) = try makeAcceptDriftFixture(
+        bindingsJSON: """
+        {
+          "version": 1,
+          "counters": {},
+          "bindings": {}
+        }
+        """
+    )
+    defer { try? fm.removeItem(at: tmp) }
+
+    var threw = false
+    do {
+        _ = try IdsManager.acceptDrift(project: project, id: "BR1")
+    } catch let error as IdsManager.AcceptDriftError {
+        threw = true
+        guard case .notInStore(let id) = error else {
+            Issue.record("Expected notInStore, got \(error)")
+            return
+        }
+        #expect(id == "BR1")
+    }
+    #expect(threw)
+    #expect(!fm.fileExists(atPath: project.idsAuditURL.path))
+}
+
+@Test func acceptDriftMissingIDInMarkdown() throws {
+    let fm = FileManager.default
+    let (tmp, _, project) = try makeAcceptDriftFixture(
+        markdownBody: """
+        # Overview
+        ## Unrelated heading
+        """,
+        bindingsJSON: """
+        {
+          "version": 1,
+          "counters": { "BR": 1 },
+          "bindings": { "BR1": "User Login" }
+        }
+        """
+    )
+    defer { try? fm.removeItem(at: tmp) }
+
+    var threw = false
+    do {
+        _ = try IdsManager.acceptDrift(project: project, id: "BR1")
+    } catch let error as IdsManager.AcceptDriftError {
+        threw = true
+        guard case .notInMarkdown(let id) = error else {
+            Issue.record("Expected notInMarkdown, got \(error)")
+            return
+        }
+        #expect(id == "BR1")
+    }
+    #expect(threw)
+
+    let storeAfter = IdsManager.loadStore(from: project.idsURL)
+    #expect(storeAfter.bindings["BR1"] == "User Login")
+    #expect(!fm.fileExists(atPath: project.idsAuditURL.path))
+}
+
+@Test func acceptDriftRejectsDuplicateClaims() throws {
+    let fm = FileManager.default
+    let (tmp, _, project) = try makeAcceptDriftFixture(
+        markdownBody: """
+        # Overview
+        ## BR1: User authentication
+        ## BR1: Other claim
+        """,
+        bindingsJSON: """
+        {
+          "version": 1,
+          "counters": { "BR": 1 },
+          "bindings": { "BR1": "User Login" }
+        }
+        """
+    )
+    defer { try? fm.removeItem(at: tmp) }
+
+    var threw = false
+    do {
+        _ = try IdsManager.acceptDrift(project: project, id: "BR1")
+    } catch let error as IdsManager.AcceptDriftError {
+        threw = true
+        guard case .duplicateClaims(let id, let locations) = error else {
+            Issue.record("Expected duplicateClaims, got \(error)")
+            return
+        }
+        #expect(id == "BR1")
+        #expect(locations.count == 2)
+    }
+    #expect(threw)
+
+    let storeAfter = IdsManager.loadStore(from: project.idsURL)
+    #expect(storeAfter.bindings["BR1"] == "User Login")
+    #expect(!fm.fileExists(atPath: project.idsAuditURL.path))
+}
+
+@Test func acceptDriftAuditWriteFailureDoesNotUpdateBinding() throws {
+    let fm = FileManager.default
+    let (tmp, mdURL, project) = try makeAcceptDriftFixture()
+    defer { try? fm.removeItem(at: tmp) }
+
+    // Occupy the audit path with a directory so append must fail (fail closed).
+    try fm.createDirectory(at: project.idsAuditURL, withIntermediateDirectories: true)
+
+    let mdBefore = try String(contentsOf: mdURL, encoding: .utf8)
+    let storeBefore = IdsManager.loadStore(from: project.idsURL)
+
+    var threw = false
+    do {
+        _ = try IdsManager.acceptDrift(project: project, id: "BR1", actor: "tester")
+    } catch let error as IdsManager.AcceptDriftError {
+        threw = true
+        guard case .auditWriteFailed = error else {
+            Issue.record("Expected auditWriteFailed, got \(error)")
+            return
+        }
+    }
+    #expect(threw)
+
+    let storeAfter = IdsManager.loadStore(from: project.idsURL)
+    #expect(storeAfter == storeBefore)
+    #expect(storeAfter.bindings["BR1"] == "User Login")
+
+    let mdAfter = try String(contentsOf: mdURL, encoding: .utf8)
+    #expect(mdAfter == mdBefore)
+}
+
+@Test func acceptDriftDoesNotTouchOtherBindings() throws {
+    let fm = FileManager.default
+    let (tmp, _, project) = try makeAcceptDriftFixture(
+        markdownBody: """
+        # Overview
+        ## BR1: User authentication
+        ## BR2: Session timeout
+        """,
+        bindingsJSON: """
+        {
+          "version": 1,
+          "counters": { "BR": 2 },
+          "bindings": {
+            "BR1": "User Login",
+            "BR2": "Session timeout"
+          }
+        }
+        """
+    )
+    defer { try? fm.removeItem(at: tmp) }
+
+    _ = try IdsManager.acceptDrift(project: project, id: "BR1", actor: "tester")
+
+    let storeAfter = IdsManager.loadStore(from: project.idsURL)
+    #expect(storeAfter.bindings["BR1"] == "User authentication")
+    #expect(storeAfter.bindings["BR2"] == "Session timeout")
+    #expect(storeAfter.counters["BR"] == 2)
+
+    let events = try IdsManager.loadAuditEvents(from: project.idsAuditURL)
+    #expect(events.count == 1)
+    #expect(events[0].id == "BR1")
+}
+
+@Test func acceptDriftAppendsAuditLogOnRepeatedAccepts() throws {
+    let fm = FileManager.default
+    // First accept
+    let (tmp, mdURL, project) = try makeAcceptDriftFixture()
+    defer { try? fm.removeItem(at: tmp) }
+
+    _ = try IdsManager.acceptDrift(project: project, id: "BR1", note: "first", actor: "tester")
+
+    // Create a second drift and accept again
+    try """
+    # Overview
+    ## BR1: User authn
+    """.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    _ = try IdsManager.acceptDrift(project: project, id: "BR1", note: "second", actor: "tester")
+
+    let events = try IdsManager.loadAuditEvents(from: project.idsAuditURL)
+    #expect(events.count == 2)
+    #expect(events[0].oldContent == "User Login")
+    #expect(events[0].newContent == "User authentication")
+    #expect(events[0].note == "first")
+    #expect(events[1].oldContent == "User authentication")
+    #expect(events[1].newContent == "User authn")
+    #expect(events[1].note == "second")
+
+    let storeAfter = IdsManager.loadStore(from: project.idsURL)
+    #expect(storeAfter.bindings["BR1"] == "User authn")
+}

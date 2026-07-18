@@ -203,7 +203,7 @@ struct Lint: ParsableCommand {
             )
             if !drifts.isEmpty {
                 warn("\(drifts.count) ID(s) with content drift (mode=\(sensitivity.rawValue))",
-                     suggestion: "Review old vs new text below; fix the heading or accept deliberately (see #66).")
+                     suggestion: "Review old vs new text below; revert the heading, or run `specticus ids accept-drift <ID>` for same-identity rewording (#66).")
                 for d in drifts.prefix(8) {
                     print("      \(d.id):")
                     print("        was: \(d.oldContent)")
