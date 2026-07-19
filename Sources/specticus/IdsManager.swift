@@ -1,4 +1,9 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 // MARK: - Traceability IDs manager (implements #6 happy path)
 //
@@ -73,6 +78,8 @@ enum IdsManager {
 
     /// Scans the project's content Markdown (top-level like assembleSources) and returns heading info.
     ///
+    /// Content file discovery is shared via `MarkdownSources` (#35) with `DocumentGenerator.assembleSources`.
+    ///
     /// Per issue #30, the ID scanner **ignores** headings that appear inside:
     /// - Fenced code blocks (``` or ~~~)
     /// - Blockquotes (lines starting with `>`)
@@ -83,27 +90,11 @@ enum IdsManager {
     /// Per issue #32, only ATX levels **1…`ids.heading_max_level`** may own IDs
     /// (default H1+H2; configurable through H6). Deeper headings are skipped entirely.
     static func collectHeadings(project: SpecticusProject) throws -> [HeadingInfo] {
-        let fm = FileManager.default
-        let base = project.root
         let maxLevel = SpecticusConfig.IdsSection.clampHeadingMaxLevel(
             project.config.ids.headingMaxLevel
         )
-
-        let contents = try fm.contentsOfDirectory(
-            at: base,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        )
-
-        let mdFiles = contents
-            .filter { url in
-                let name = url.lastPathComponent.lowercased()
-                return (name.hasSuffix(".md") || name.hasSuffix(".markdown")) &&
-                       name != "readme.md" &&
-                       name != "readme.markdown" &&
-                       name != "welcome-template.md"
-            }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        // Shared discovery with assemble (#35) — same filters + lex order.
+        let mdFiles = try MarkdownSources.discoverContentFiles(in: project.root)
 
         var results: [HeadingInfo] = []
 
@@ -117,8 +108,8 @@ enum IdsManager {
             for (idx, line) in lines.enumerated() {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
 
-                // Track fenced code blocks (``` or ~~~)
-                if isFenceDelimiter(trimmed) {
+                // Track fenced code blocks (``` or ~~~) — shared delimiter helper (#35)
+                if MarkdownSources.isFenceDelimiter(trimmed) {
                     inFence.toggle()
                     continue
                 }
@@ -146,7 +137,7 @@ enum IdsManager {
                 // Skip table rows (conservative: anything starting with | after ws)
                 if trimmed.hasPrefix("|") { continue }
 
-                guard let (level, title) = parseATXHeading(line) else { continue }
+                guard let (level, title) = MarkdownSources.parseATXHeading(line) else { continue }
                 // Issue #32: eligible levels are 1…heading_max_level (default 2 = H1+H2).
                 guard level >= SpecticusConfig.IdsSection.minHeadingLevel,
                       level <= maxLevel else { continue }
@@ -184,10 +175,6 @@ enum IdsManager {
         return results
     }
 
-    private static func isFenceDelimiter(_ trimmed: String) -> Bool {
-        return trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~")
-    }
-
     struct DriftFinding: Equatable, Sendable {
         let id: String
         let oldContent: String
@@ -201,11 +188,67 @@ enum IdsManager {
         let title: String
     }
 
-    /// Main entry for `ids assign`.
+    // MARK: - Assign options & safety (#35)
+
+    /// Options for `ids assign` write safety and UX (#35).
+    ///
+    /// Programmatic / test callers typically use `assumeYes: true` (default) so confirmation
+    /// is not required. The CLI sets `assumeYes` from `--yes` and enables interactive prompts.
+    struct AssignOptions: Sendable {
+        var dryRun: Bool = false
+        /// When true, skip the interactive confirmation prompt.
+        var assumeYes: Bool = true
+        /// Print line-level before/after for planned Markdown rewrites.
+        var showDiff: Bool = false
+        /// Warn when git has uncommitted changes in files about to be rewritten.
+        var checkGit: Bool = true
+        /// Override TTY detection (`nil` = detect via `isatty`). Used by tests.
+        var isInteractive: Bool? = nil
+        /// Override confirmation prompt. Return `true` to proceed. Used by tests.
+        var confirmHandler: (@Sendable (String) -> Bool)? = nil
+        /// When true, print a stronger banner (e.g. build-time `ids.auto_assign`).
+        var autoAssignContext: Bool = false
+
+        static func dryRunOnly(showDiff: Bool = false) -> AssignOptions {
+            AssignOptions(dryRun: true, assumeYes: true, showDiff: showDiff)
+        }
+    }
+
+    enum AssignAbort: Error, Equatable, CustomStringConvertible, LocalizedError {
+        case userDeclined
+        case nonInteractiveRequiresYes(fileCount: Int)
+
+        var description: String {
+            switch self {
+            case .userDeclined:
+                return "Assign cancelled — no files were written. Re-run with --yes to skip the prompt, or --dry-run to preview."
+            case .nonInteractiveRequiresYes(let n):
+                return "Assign would rewrite \(n) Markdown source file(s) in place, but this session is non-interactive. Re-run with --yes to confirm, or --dry-run to preview (#35)."
+            }
+        }
+
+        var errorDescription: String? { description }
+    }
+
+    /// Main entry for `ids assign` (backward-compatible). Prefer `assignIDs(project:options:)`.
     static func assignIDs(project: SpecticusProject, dryRun: Bool) throws {
+        try assignIDs(project: project, options: AssignOptions(dryRun: dryRun, assumeYes: true))
+    }
+
+    /// Main entry for `ids assign` with UX/safety options (#35).
+    static func assignIDs(project: SpecticusProject, options: AssignOptions) throws {
+        let dryRun = options.dryRun
         let storeURL = project.idsURL
         var store = loadStore(from: storeURL)
         let sensitivity = project.config.ids.driftSensitivity
+
+        if options.autoAssignContext {
+            print("""
+                ⚠️  ids.auto_assign is enabled — build will run `ids assign` and may REWRITE Markdown sources in place (#35).
+                   Disable with `ids.auto_assign: false` in .specticus/config.yml if this is unexpected.
+                   Safer workflow: `specticus ids assign --dry-run` then `specticus ids assign --yes`.
+                """)
+        }
 
         let headings = try collectHeadings(project: project)
 
@@ -344,19 +387,28 @@ enum IdsManager {
             print("    Tip: put the item in a section file (e.g. 008-technical-specifications.md), use a keyword in the title, or add a manual ID like `## TS3: …`.")
         }
 
+        // Planned Markdown rewrites (by file) — used for dry-run, diff, preflight, and apply.
+        let byFile = Dictionary(grouping: newlyAssigned, by: { $0.info.file })
+        let filesToRewrite = byFile.keys.sorted { $0.lastPathComponent < $1.lastPathComponent }
+
         if dryRun {
+            print("🔍 Dry-run: no files will be written (#35).")
             if !newlyAssigned.isEmpty {
-                print("Would assign the following IDs (dry-run):")
+                print("Would assign \(newlyAssigned.count) ID(s) and rewrite \(filesToRewrite.count) Markdown file(s) in place:")
                 for (h, id) in newlyAssigned {
-                    print("  \(id): \(h.content)  [\(h.file.lastPathComponent)]")
+                    print("  \(id): \(h.content)  [\(h.file.lastPathComponent):\(h.lineIndex + 1)]")
                 }
+                if options.showDiff {
+                    try printAssignDiffs(byFile: byFile)
+                } else {
+                    print("   Tip: add --diff to see line-level before/after for each rewrite.")
+                }
+                print("Would also update .specticus/\(storeURL.lastPathComponent)")
+            } else if !hasProblems {
+                print("✅ No new IDs to assign. Would refresh \(storeURL.lastPathComponent) bindings only (no Markdown rewrites).")
             }
             if hasProblems {
-                print("Note: problems above would block actual assignment.")
-            }
-            // For dry-run we still want to show current state, but no write
-            if newlyAssigned.isEmpty && !hasProblems {
-                print("✅ No IDs to assign. Everything looks good.")
+                print("Note: problems above would block an actual (non-dry-run) write.")
             }
             return
         }
@@ -377,16 +429,59 @@ enum IdsManager {
         }
 
         if newlyAssigned.isEmpty {
-            // Bootstrap / persist current bindings even if no new assignments
+            // Bootstrap / persist current bindings even if no new assignments — no Markdown mutation.
             try saveStore(store, to: storeURL)
-            print("💾 Updated \(storeURL.lastPathComponent) (no new IDs assigned)")
+            print("💾 Updated \(storeURL.lastPathComponent) (no new IDs assigned; Markdown sources unchanged)")
             return
         }
 
-        // Apply rewrites
-        let byFile = Dictionary(grouping: newlyAssigned, by: { $0.info.file })
+        // --- Safety preflight before rewriting source files (#35) ---
+        printAssignMutationPlan(
+            newlyAssigned: newlyAssigned,
+            filesToRewrite: filesToRewrite,
+            storeName: storeURL.lastPathComponent
+        )
 
-        for (file, items) in byFile {
+        if options.showDiff {
+            try printAssignDiffs(byFile: byFile)
+        }
+
+        if options.checkGit {
+            var candidates = filesToRewrite
+            candidates.append(storeURL)
+            let dirty = GitWorkspace.dirtyPaths(among: candidates, in: project.root)
+            if !dirty.isEmpty {
+                print("⚠️  Git: uncommitted changes in path(s) that will be modified:")
+                for name in dirty {
+                    print("     • \(name)")
+                }
+                print("   Consider committing or stashing first. Continue only if intentional.")
+            }
+        }
+
+        let interactive = options.isInteractive ?? isInteractiveTerminal()
+        if !options.assumeYes {
+            if interactive {
+                let prompt = "Proceed with rewriting \(filesToRewrite.count) Markdown file(s) in place? [y/N]: "
+                let confirmed: Bool
+                if let handler = options.confirmHandler {
+                    confirmed = handler(prompt)
+                } else {
+                    confirmed = promptYesNo(prompt)
+                }
+                if !confirmed {
+                    print("Cancelled — no files written.")
+                    throw AssignAbort.userDeclined
+                }
+            } else {
+                // Non-interactive without --yes: refuse source mutation (trustworthy for CI/scripts).
+                throw AssignAbort.nonInteractiveRequiresYes(fileCount: filesToRewrite.count)
+            }
+        }
+
+        // Apply rewrites
+        for file in filesToRewrite {
+            guard let items = byFile[file] else { continue }
             var lines = try String(contentsOf: file, encoding: .utf8)
                 .split(separator: "\n", omittingEmptySubsequences: false)
                 .map(String.init)
@@ -403,6 +498,56 @@ enum IdsManager {
 
         try saveStore(store, to: storeURL)
         print("💾 Updated \(storeURL.lastPathComponent)")
+        print("✅ Assign complete — review the Markdown diff in version control before committing.")
+    }
+
+    /// Human-readable mutation plan printed before writing source files.
+    private static func printAssignMutationPlan(
+        newlyAssigned: [(info: HeadingInfo, newID: String)],
+        filesToRewrite: [URL],
+        storeName: String
+    ) {
+        print("⚠️  Source mutation plan (#35) — `ids assign` rewrites Markdown in place:")
+        print("   Will assign \(newlyAssigned.count) new ID(s) across \(filesToRewrite.count) file(s):")
+        for file in filesToRewrite {
+            let count = newlyAssigned.filter { $0.info.file == file }.count
+            print("     • \(file.lastPathComponent) (\(count) ID(s))")
+        }
+        print("   Will update .specticus/\(storeName)")
+        print("   Existing ID tokens are never overwritten; only missing IDs are injected.")
+        print("   Tip: preview with `specticus ids assign --dry-run` (add --diff for line patches).")
+    }
+
+    /// Print simple unified-style hunks for planned ID injections (not a full git patch).
+    private static func printAssignDiffs(
+        byFile: [URL: [(info: HeadingInfo, newID: String)]]
+    ) throws {
+        print("📄 Planned line changes:")
+        let files = byFile.keys.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        for file in files {
+            guard let items = byFile[file] else { continue }
+            print("   --- \(file.lastPathComponent)")
+            for (h, id) in items.sorted(by: { $0.info.lineIndex < $1.info.lineIndex }) {
+                let newLine = addIDPrefix(to: h.originalLine, id: id)
+                print("   @@ line \(h.lineIndex + 1) @@")
+                print("   - \(h.originalLine)")
+                print("   + \(newLine)")
+            }
+        }
+    }
+
+    /// Whether stdin is attached to a terminal (interactive session).
+    static func isInteractiveTerminal() -> Bool {
+        isatty(fileno(stdin)) != 0
+    }
+
+    /// Prompt on stdout/stdin for y/N. Empty or anything other than y/yes is false.
+    private static func promptYesNo(_ message: String) -> Bool {
+        print(message, terminator: "")
+        guard let line = readLine()?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() else {
+            return false
+        }
+        return line == "y" || line == "yes"
     }
 
     // MARK: - Accept drift (#66)
@@ -1006,21 +1151,6 @@ enum IdsManager {
     }
 
     // MARK: - Helpers
-
-    private static func parseATXHeading(_ line: String) -> (level: Int, title: String)? {
-        guard let regex = try? NSRegularExpression(pattern: #"^\s*(#{1,6})\s+(.*)$"#) else { return nil }
-        let ns = line as NSString
-        guard let m = regex.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) else { return nil }
-        let hashes = ns.substring(with: m.range(at: 1))
-        var title = ns.substring(with: m.range(at: 2))
-        // trim trailing #s like in TOC parser
-        if let trail = title.range(of: #"\s+#+\s*$"#, options: .regularExpression) {
-            title = String(title[..<trail.lowerBound])
-        }
-        title = title.trimmingCharacters(in: .whitespaces)
-        guard !title.isEmpty else { return nil }
-        return (hashes.count, title)
-    }
 
     /// Parses a traceability ID from an outline-stripped heading title according to the
     /// exact syntax rules defined in issue #31.

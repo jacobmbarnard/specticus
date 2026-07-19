@@ -2318,3 +2318,257 @@ private func makeLifecycleFixture(
     #expect(store.bindings["BR5"] == "Manual ID")
     #expect((store.counters["BR"] ?? 0) >= 5)
 }
+
+// MARK: - Shared Markdown discovery + assign UX safety (#35)
+
+@Test func markdownSourcesDiscoverContentFilesLexOrderAndFilters() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-md-sources-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    try "C".write(to: tmp.appendingPathComponent("003-z.md"), atomically: true, encoding: .utf8)
+    try "A".write(to: tmp.appendingPathComponent("001-a.md"), atomically: true, encoding: .utf8)
+    try "B".write(to: tmp.appendingPathComponent("002-b.markdown"), atomically: true, encoding: .utf8)
+    try "SKIP".write(to: tmp.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
+    try "SKIP2".write(to: tmp.appendingPathComponent("welcome-template.md"), atomically: true, encoding: .utf8)
+    try "NOTMD".write(to: tmp.appendingPathComponent("notes.txt"), atomically: true, encoding: .utf8)
+
+    // Hidden dir content must not appear (skipsHiddenFiles)
+    let hidden = tmp.appendingPathComponent(".specticus", isDirectory: true)
+    try fm.createDirectory(at: hidden, withIntermediateDirectories: true)
+    try "HIDDEN".write(to: hidden.appendingPathComponent("secret.md"), atomically: true, encoding: .utf8)
+
+    let files = try MarkdownSources.discoverContentFiles(in: tmp)
+    let names = files.map(\.lastPathComponent)
+    #expect(names == ["001-a.md", "002-b.markdown", "003-z.md"])
+    #expect(MarkdownSources.isContentMarkdownFilename("007-business-requirements.md"))
+    #expect(!MarkdownSources.isContentMarkdownFilename("README.md"))
+    #expect(!MarkdownSources.isContentMarkdownFilename("welcome-template.md"))
+    #expect(!MarkdownSources.isContentMarkdownFilename("style.css"))
+}
+
+@Test func markdownSourcesAssembleAndCollectHeadingsShareDiscovery() throws {
+    // assemble + collectHeadings must see the same content file set (#35).
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-shared-discovery-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    try """
+    # Overview
+    ## Login requirement
+    """.write(to: tmp.appendingPathComponent("007-business-requirements.md"), atomically: true, encoding: .utf8)
+    try "SKIP-ME".write(to: tmp.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
+    try "LEGACY".write(to: tmp.appendingPathComponent("welcome-template.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let assembled = try DocumentGenerator.assembleSources(input: nil, baseDirectory: tmp.path)
+    #expect(assembled.contains("Login requirement"))
+    #expect(!assembled.contains("SKIP-ME"))
+    #expect(!assembled.contains("LEGACY"))
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let headings = try IdsManager.collectHeadings(project: project)
+    let discovered = try MarkdownSources.discoverContentFiles(in: tmp)
+    #expect(Set(headings.map { $0.file.lastPathComponent }) == Set(discovered.map(\.lastPathComponent)))
+    #expect(headings.contains { $0.content.contains("Login") || $0.title.contains("Login") })
+}
+
+@Test func markdownSourcesFenceAndATXHelpers() {
+    #expect(MarkdownSources.isFenceDelimiter("```"))
+    #expect(MarkdownSources.isFenceDelimiter("```swift"))
+    #expect(MarkdownSources.isFenceDelimiter("~~~"))
+    #expect(!MarkdownSources.isFenceDelimiter("# Heading"))
+
+    let h = MarkdownSources.parseATXHeading("##  Hello World  ##")
+    #expect(h?.level == 2)
+    #expect(h?.title == "Hello World")
+    #expect(MarkdownSources.parseATXHeading("not a heading") == nil)
+}
+
+@Test func assignDryRunDoesNotWriteMarkdownOrStore() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-assign-dry-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-business-requirements.md")
+    try """
+    # Overview
+    ## User Login requirement
+    """.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let mdBefore = try String(contentsOf: mdURL, encoding: .utf8)
+
+    try IdsManager.assignIDs(project: project, options: .dryRunOnly(showDiff: true))
+
+    let mdAfter = try String(contentsOf: mdURL, encoding: .utf8)
+    #expect(mdAfter == mdBefore)
+    #expect(!fm.fileExists(atPath: project.idsURL.path))
+}
+
+@Test func assignNonInteractiveWithoutYesAbortsBeforeWrite() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-assign-noyes-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-business-requirements.md")
+    try """
+    # Overview
+    ## User Login requirement
+    """.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let mdBefore = try String(contentsOf: mdURL, encoding: .utf8)
+
+    var threw = false
+    do {
+        try IdsManager.assignIDs(
+            project: project,
+            options: IdsManager.AssignOptions(
+                dryRun: false,
+                assumeYes: false,
+                showDiff: false,
+                checkGit: false,
+                isInteractive: false
+            )
+        )
+    } catch let error as IdsManager.AssignAbort {
+        threw = true
+        guard case .nonInteractiveRequiresYes(let n) = error else {
+            Issue.record("Expected nonInteractiveRequiresYes, got \(error)")
+            return
+        }
+        #expect(n >= 1)
+    }
+    #expect(threw)
+
+    let mdAfter = try String(contentsOf: mdURL, encoding: .utf8)
+    #expect(mdAfter == mdBefore)
+    #expect(!fm.fileExists(atPath: project.idsURL.path))
+}
+
+@Test func assignInteractiveDeclineDoesNotWrite() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-assign-decline-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-business-requirements.md")
+    try """
+    # Overview
+    ## User Login requirement
+    """.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let mdBefore = try String(contentsOf: mdURL, encoding: .utf8)
+
+    var threw = false
+    do {
+        try IdsManager.assignIDs(
+            project: project,
+            options: IdsManager.AssignOptions(
+                dryRun: false,
+                assumeYes: false,
+                checkGit: false,
+                isInteractive: true,
+                confirmHandler: { _ in false }
+            )
+        )
+    } catch let error as IdsManager.AssignAbort {
+        threw = true
+        #expect(error == .userDeclined)
+    }
+    #expect(threw)
+
+    let mdAfter = try String(contentsOf: mdURL, encoding: .utf8)
+    #expect(mdAfter == mdBefore)
+    #expect(!fm.fileExists(atPath: project.idsURL.path))
+}
+
+@Test func assignInteractiveYesWritesSources() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-assign-yes-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-business-requirements.md")
+    try """
+    # Overview
+    ## User Login requirement
+    """.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+
+    try IdsManager.assignIDs(
+        project: project,
+        options: IdsManager.AssignOptions(
+            dryRun: false,
+            assumeYes: false,
+            showDiff: true,
+            checkGit: false,
+            isInteractive: true,
+            confirmHandler: { _ in true }
+        )
+    )
+
+    let mdAfter = try String(contentsOf: mdURL, encoding: .utf8)
+    #expect(mdAfter.contains("BR") && mdAfter.contains("User Login requirement"))
+    #expect(fm.fileExists(atPath: project.idsURL.path))
+    let store = IdsManager.loadStore(from: project.idsURL)
+    #expect(!store.bindings.isEmpty)
+}
+
+@Test func assignAssumeYesStillWorksForProgrammaticCallers() throws {
+    // Backward-compatible assignIDs(project:dryRun:) must still write without prompts.
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-assign-compat-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-business-requirements.md")
+    try """
+    # Overview
+    ## Offline Mode requirement
+    """.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    try IdsManager.assignIDs(project: project, dryRun: false)
+
+    let mdAfter = try String(contentsOf: mdURL, encoding: .utf8)
+    #expect(mdAfter.contains("requirement"))
+    #expect(mdAfter.contains("BR"))
+}

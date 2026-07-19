@@ -206,7 +206,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
     }
 
     struct IdsSection: Codable, Equatable, Sendable {
-        /// When true, `ids assign` auto-assign behavior on build will run (see #6). IDs are simple BR1/TS2/ADR3 (no dash/padding).
+        /// When true, build runs `ids assign` automatically (#6). Rewrites Markdown in place —
+        /// prefer explicit assign with `--dry-run` / `--yes` (#35). Further auto_assign UX in #38.
         var autoAssign: Bool
         /// Maximum ATX heading level that may own a traceability ID (#32).
         /// Levels **1…headingMaxLevel** are eligible (default **2** = H1+H2; max **6**).
