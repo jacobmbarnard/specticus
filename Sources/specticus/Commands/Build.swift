@@ -151,9 +151,19 @@ struct Build: ParsableCommand {
         }
 
         if project.config.ids.autoAssign {
-            print("ℹ️  ids.auto_assign enabled — running `ids assign` automatically (see #6).")
+            // Build-time auto-assign is inherently non-interactive; assumeYes with a strong
+            // safety banner (#35). Deeper auto_assign policy/UX lives in #38.
             do {
-                try IdsManager.assignIDs(project: project, dryRun: false)
+                try IdsManager.assignIDs(
+                    project: project,
+                    options: IdsManager.AssignOptions(
+                        dryRun: false,
+                        assumeYes: true,
+                        showDiff: false,
+                        checkGit: true,
+                        autoAssignContext: true
+                    )
+                )
             } catch {
                 print("⚠️  Auto-assign encountered an issue: \(error.localizedDescription)")
             }

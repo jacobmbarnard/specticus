@@ -91,9 +91,9 @@ struct DocumentGenerator {
 
     /// Assembles Markdown content.
     /// - If `input` is provided: loads that single file (single-file mode).
-    /// - If `input` is nil: discovers all *.md / *.markdown files in the directory,
-    ///   sorts them lexicographically, skips README* and welcome-template.md,
-    ///   and concatenates them. (implements #3)
+    /// - If `input` is nil: discovers content files via `MarkdownSources` (#35 / #3) —
+    ///   top-level `*.md` / `*.markdown`, lex order, skips README* and welcome-template.md —
+    ///   and concatenates them.
     /// - Falls back to `fallbackInput` (from config) when set, then `welcome-template.md`
     ///   for legacy single-file projects when no other .md files are present.
     /// Hidden directories (e.g. `.specticus/`) are never treated as content sources.
@@ -113,22 +113,8 @@ struct DocumentGenerator {
             return try String(contentsOf: inputURL, encoding: .utf8)
         }
 
-        // Multi-file discovery (lexicographic order). skipsHiddenFiles excludes `.specticus/`.
-        let contents = try fm.contentsOfDirectory(
-            at: baseURL,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        )
-
-        let mdFiles = contents
-            .filter { url in
-                let name = url.lastPathComponent.lowercased()
-                return (name.hasSuffix(".md") || name.hasSuffix(".markdown")) &&
-                       name != "readme.md" &&
-                       name != "readme.markdown" &&
-                       name != "welcome-template.md"
-            }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        // Multi-file discovery (#35): shared with IdsManager.collectHeadings via MarkdownSources.
+        let mdFiles = try MarkdownSources.discoverContentFiles(in: baseURL)
 
         if mdFiles.isEmpty {
             // Config-driven fallback, then legacy welcome-template.md

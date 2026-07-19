@@ -12,7 +12,9 @@ struct Ids: ParsableCommand {
             / contentStrictPlus; #36). Plain-text headings only (no Markdown in titles). \
             Content drift is never auto-accepted — use `ids accept-drift <ID>` for same-identity \
             rewording after review (#66). Orphan bindings (deleted headings) reserve numbers; \
-            inspect with `ids status`, prune after review with `ids prune-orphans` (#37).
+            inspect with `ids status`, prune after review with `ids prune-orphans` (#37). \
+            `ids assign` rewrites Markdown in place — preview with `--dry-run` / `--diff`, \
+            confirm with `--yes` when non-interactive (#35).
             """,
         subcommands: [
             IdsAssign.self,
@@ -25,11 +27,12 @@ struct Ids: ParsableCommand {
     func run() throws {
         print("""
             Use:
-              specticus ids assign
+              specticus ids assign --dry-run
+              specticus ids assign --yes
               specticus ids accept-drift <ID>
               specticus ids status
               specticus ids prune-orphans
-            (see issues #6, #37, #66).
+            (see issues #6, #35, #37, #66).
             """)
     }
 }

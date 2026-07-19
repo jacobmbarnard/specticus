@@ -45,8 +45,10 @@ specticus build
 # Check for issues
 specticus lint
 
-# Manage traceability IDs
-specticus ids assign
+# Manage traceability IDs (preview first — assign rewrites Markdown in place)
+specticus ids assign --dry-run
+specticus ids assign --dry-run --diff
+specticus ids assign --yes
 
 # Inspect store vs Markdown (orphans, drift, recovery hints)
 specticus ids status
@@ -66,7 +68,7 @@ specticus ids prune-orphans
 | `build`              | Generate HTML documentation                                      |
 | `lint`               | Validate structure and IDs                                       |
 | `clean`              | Remove generated output                                          |
-| `ids assign`         | Assign missing traceability IDs                                  |
+| `ids assign`         | Assign missing IDs (rewrites Markdown; use `--dry-run` / `--yes`) |
 | `ids status`         | Report ids.json lifecycle (live IDs, orphans, drift)             |
 | `ids accept-drift`   | Accept content drift for one ID (same-identity reword + audit)   |
 | `ids prune-orphans`  | Remove orphan bindings (counters never decrease)                 |
