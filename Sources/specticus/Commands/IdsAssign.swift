@@ -10,7 +10,9 @@ struct IdsAssign: ParsableCommand {
             Never auto-accepts drift and never overwrites existing ID tokens. After review, rebind \
             one ID at a time with `specticus ids accept-drift <ID>` (#66). Rejects Markdown \
             formatting in headings. By default only H1–H2 may own IDs (ids.heading_max_level, #32). \
-            New numbers are (per-prefix max)+1, never reused (#33). See GitHub issue #6.
+            New numbers are (per-prefix max)+1, never reused (#33). Orphan bindings (deleted \
+            headings) are reported but left in place; use `ids status` / `ids prune-orphans` (#37). \
+            Missing ids.json is recovered by bootstrapping from live Markdown IDs. See #6, #37.
             """
     )
 

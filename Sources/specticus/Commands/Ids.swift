@@ -6,17 +6,30 @@ struct Ids: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Manage stable traceability IDs (BR1, TS2, ADR3, etc.).",
         discussion: """
-            See GitHub issues #6, #32–#36, #66. IDs use simple form (BR1, BR2, TS1, … no dash \
+            See GitHub issues #6, #32–#37, #66. IDs use simple form (BR1, BR2, TS1, … no dash \
             or padding). Must be unique. Default: H1–H2 may own IDs (#32). Counters: per-prefix \
             max+1, no reuse (#33). Drift sensitivity: ids.drift_sensitivity (strict / contentStrict \
             / contentStrictPlus; #36). Plain-text headings only (no Markdown in titles). \
             Content drift is never auto-accepted — use `ids accept-drift <ID>` for same-identity \
-            rewording after review (#66).
+            rewording after review (#66). Orphan bindings (deleted headings) reserve numbers; \
+            inspect with `ids status`, prune after review with `ids prune-orphans` (#37).
             """,
-        subcommands: [IdsAssign.self, IdsAcceptDrift.self]
+        subcommands: [
+            IdsAssign.self,
+            IdsAcceptDrift.self,
+            IdsStatus.self,
+            IdsPruneOrphans.self
+        ]
     )
 
     func run() throws {
-        print("Use `specticus ids assign` or `specticus ids accept-drift <ID>` (see issues #6, #66).")
+        print("""
+            Use:
+              specticus ids assign
+              specticus ids accept-drift <ID>
+              specticus ids status
+              specticus ids prune-orphans
+            (see issues #6, #37, #66).
+            """)
     }
 }
