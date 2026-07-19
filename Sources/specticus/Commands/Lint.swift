@@ -215,6 +215,28 @@ struct Lint: ParsableCommand {
             } else if !store.bindings.isEmpty {
                 ok("No ID content drift detected (mode=\(sensitivity.rawValue); checked \(store.bindings.count) bound ID(s))")
             }
+
+            // Orphans (#37): informational — reserved numbers are intentional (#33).
+            let liveIDs = IdsManager.liveIDSet(from: headings)
+            let orphans = IdsManager.findOrphans(store: store, liveIDs: liveIDs)
+            let storeExists = FileManager.default.fileExists(atPath: project.idsURL.path)
+            if !storeExists && !liveIDs.isEmpty {
+                warn("ids.json is missing while Markdown claims \(liveIDs.count) ID(s)",
+                     suggestion: "Run `specticus ids assign` to bootstrap the store from Markdown (#37 recovery).")
+            } else if orphans.isEmpty {
+                if storeExists || !store.bindings.isEmpty {
+                    ok("No orphan ID bindings in ids.json")
+                }
+            } else {
+                warn("\(orphans.count) orphan ID binding(s) in ids.json (not claimed in Markdown)",
+                     suggestion: "Orphans reserve numbers by design (#33). Leave for history, inspect with `specticus ids status`, or after review `specticus ids prune-orphans` (#37).")
+                for o in orphans.prefix(8) {
+                    print("      \(o.id): \(o.content)")
+                }
+                if orphans.count > 8 {
+                    print("      … and \(orphans.count - 8) more")
+                }
+            }
         } catch {
             warn("Could not fully validate traceability IDs: \(error.localizedDescription)")
         }
@@ -223,7 +245,7 @@ struct Lint: ParsableCommand {
         print("\n  ℹ️  External tools:")
         print("      • Mermaid diagrams: rendered client-side in the output HTML (no CLI tool required).")
         print("      • For advanced Mermaid CLI rendering you can optionally install @mermaid-js/mermaid-cli.")
-        print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, asset copy, diagrams, build tracking (#8), and ID traceability settings (#6; #32 heading levels; #33 counters; #36 drift_sensitivity). Lint enforces ID uniqueness, drift, and plain-text headings.")
+        print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, asset copy, diagrams, build tracking (#8), and ID traceability settings (#6; #32 heading levels; #33 counters; #36 drift_sensitivity; #37 ids.json lifecycle). Lint enforces ID uniqueness, drift, plain-text headings, and reports orphans.")
         if project.hasSpecticusDirectory {
             if FileManager.default.fileExists(atPath: project.buildNumberURL.path) {
                 if let record = try? BuildTracker.load(from: project.buildNumberURL) {

@@ -10,6 +10,19 @@ import Foundation
 // New IDs always use (max seen for that prefix) + 1. Gaps left by deleted or retired
 // requirements are intentional — orphaned entries in ids.json still reserve their numbers
 // for audit/traceability integrity. No renumbering and no gap-filling.
+//
+// ids.json lifecycle (#37):
+// - **Orphan**: a binding present in ids.json with no eligible Markdown claim.
+//   Deleting or renaming away a heading leaves an orphan by design (reserves the number).
+// - **Missing ids.json**: treated as an empty store; `ids assign` bootstraps bindings
+//   and counters from live Markdown IDs (recovery path).
+// - **Divergence**: live Markdown claims drive ownership; store holds current bindings +
+//   counters; audit log holds deliberate rebinds/prunes. Recover with assign / accept-drift /
+//   prune-orphans as appropriate — never silent bulk re-sync of identity.
+// - **prune-orphans**: removes orphan *bindings* only after explicit review; never lowers
+//   counters (numbers stay reserved forever under #33).
+// - **Manual ids.json edits**: allowed for advanced users; assign re-raises high-water marks
+//   from bindings + counters. Prefer CLI for rebind/prune so audit history is preserved.
 
 enum IdsManager {
     static let knownPrefixes: [String] = ["BR", "TS", "UC", "ADR", "BDR", "TC", "BC", "REF", "DIAG", "REV"]
@@ -280,6 +293,21 @@ enum IdsManager {
             }
             print("   → Revert the heading text, or after review rebind one ID at a time:")
             print("      specticus ids accept-drift <ID>   (same identity / reword only — #66)")
+        }
+
+        // Orphans are informational during assign — they reserve numbers (#33/#37) and do not block.
+        let liveIDs = Set(idToInfos.keys)
+        let orphans = findOrphans(store: store, liveIDs: liveIDs)
+        if !orphans.isEmpty {
+            print("ℹ️  \(orphans.count) orphan binding(s) in ids.json (ID not claimed by any eligible heading; numbers still reserved — #37):")
+            for o in orphans.prefix(8) {
+                print("   \(o.id): \(o.content)")
+            }
+            if orphans.count > 8 {
+                print("   ... and \(orphans.count - 8) more")
+            }
+            print("   → Leave them for history, or after review: specticus ids prune-orphans")
+            print("   → Inspect: specticus ids status")
         }
 
         // Per-file context: if a file already owns IDs of one prefix family (e.g. TS1, TS2),
@@ -630,6 +658,351 @@ enum IdsManager {
         formatter.formatOptions = [.withInternetDateTime]
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
         return formatter.string(from: date)
+    }
+
+    // MARK: - ids.json lifecycle (#37)
+
+    /// An orphan binding: present in `ids.json` but not claimed by any eligible Markdown heading.
+    struct OrphanFinding: Equatable, Sendable {
+        let id: String
+        let content: String
+    }
+
+    /// Snapshot of store vs Markdown for status / lint (#37).
+    struct LifecycleReport: Equatable, Sendable {
+        /// Whether `.specticus/ids.json` exists on disk.
+        let storeExists: Bool
+        /// Sorted live IDs claimed by exactly one eligible heading.
+        let liveIDs: [String]
+        /// Orphan bindings (in store, not in Markdown).
+        let orphans: [OrphanFinding]
+        /// IDs claimed by more than one heading.
+        let duplicateIDs: [String]
+        /// Live Markdown IDs that have no binding yet (will be bound on next successful assign).
+        let unboundLiveIDs: [String]
+        /// Content drift under the project's sensitivity.
+        let drifts: [DriftFinding]
+        /// Per-prefix high-water marks after raising from store bindings.
+        let counters: [String: Int]
+        /// Total bindings currently recorded.
+        let bindingCount: Int
+    }
+
+    /// Result of a successful `ids prune-orphans` run.
+    struct PruneOrphansResult: Equatable, Sendable {
+        let pruned: [OrphanFinding]
+        let actor: String
+        let note: String?
+        let auditURL: URL
+        let storeURL: URL
+        let dryRun: Bool
+    }
+
+    /// Failure modes for `pruneOrphans`.
+    enum PruneOrphansError: Error, Equatable, CustomStringConvertible, LocalizedError {
+        case noOrphans
+        case idNotOrphan(id: String, reason: String)
+        case auditWriteFailed(message: String)
+        case storeWriteFailed(message: String)
+
+        var description: String {
+            switch self {
+            case .noOrphans:
+                return "No orphan bindings to prune. ids.json bindings all match live Markdown claims (or the store is empty)."
+            case .idNotOrphan(let id, let reason):
+                return "Cannot prune \(id): \(reason)"
+            case .auditWriteFailed(let message):
+                return "Failed to write audit log (bindings not pruned — fail closed): \(message)"
+            case .storeWriteFailed(let message):
+                return "Failed to update ids.json after audit log write: \(message)"
+            }
+        }
+
+        var errorDescription: String? { description }
+    }
+
+    /// IDs present in store bindings but not among `liveIDs` (sorted by ID for stable output).
+    static func findOrphans(store: IdStore, liveIDs: Set<String>) -> [OrphanFinding] {
+        store.bindings
+            .filter { !liveIDs.contains($0.key) }
+            .map { OrphanFinding(id: $0.key, content: $0.value) }
+            .sorted { lhs, rhs in
+                // Prefer natural ID order: prefix then number.
+                let lp = prefixOf(id: lhs.id) ?? lhs.id
+                let rp = prefixOf(id: rhs.id) ?? rhs.id
+                if lp != rp {
+                    let li = knownPrefixes.firstIndex(of: lp) ?? Int.max
+                    let ri = knownPrefixes.firstIndex(of: rp) ?? Int.max
+                    if li != ri { return li < ri }
+                    return lp < rp
+                }
+                return numberOf(id: lhs.id) < numberOf(id: rhs.id)
+            }
+    }
+
+    /// Convenience: collect live IDs from headings (any claim counts, including duplicates).
+    static func liveIDSet(from headings: [HeadingInfo]) -> Set<String> {
+        Set(headings.compactMap(\.id))
+    }
+
+    /// Build a lifecycle report for `ids status` / lint (#37).
+    static func lifecycleReport(project: SpecticusProject) throws -> LifecycleReport {
+        let storeURL = project.idsURL
+        let storeExists = FileManager.default.fileExists(atPath: storeURL.path)
+        var store = loadStore(from: storeURL)
+        raiseHighWaterMarks(in: &store)
+
+        let headings = try collectHeadings(project: project)
+        let sensitivity = project.config.ids.driftSensitivity
+
+        var idToInfos: [String: [HeadingInfo]] = [:]
+        for h in headings {
+            if let id = h.id {
+                idToInfos[id, default: []].append(h)
+            }
+        }
+
+        let liveIDs = Set(idToInfos.keys)
+        let orphans = findOrphans(store: store, liveIDs: liveIDs)
+        let duplicates = idToInfos.filter { $0.value.count > 1 }.keys.sorted()
+        let unbound = liveIDs.filter { store.bindings[$0] == nil }.sorted()
+        let drifts = findContentDrifts(headings: headings, store: store, sensitivity: sensitivity)
+
+        return LifecycleReport(
+            storeExists: storeExists,
+            liveIDs: liveIDs.sorted(),
+            orphans: orphans,
+            duplicateIDs: duplicates,
+            unboundLiveIDs: unbound,
+            drifts: drifts,
+            counters: store.counters,
+            bindingCount: store.bindings.count
+        )
+    }
+
+    /// Print a human-readable lifecycle status report (#37). Does not mutate files.
+    static func printStatus(project: SpecticusProject) throws {
+        let report = try lifecycleReport(project: project)
+        let sensitivity = project.config.ids.driftSensitivity
+
+        print("📋 Traceability ID lifecycle status (#37)\n")
+
+        if report.storeExists {
+            print("  Store: .specticus/ids.json present (\(report.bindingCount) binding(s))")
+        } else {
+            print("  Store: .specticus/ids.json missing (treated as empty)")
+            print("      → Recovery: run `specticus ids assign` to bootstrap from Markdown IDs")
+        }
+
+        print("  Live IDs in Markdown: \(report.liveIDs.count)")
+        if !report.liveIDs.isEmpty {
+            let preview = report.liveIDs.prefix(12).joined(separator: ", ")
+            let more = report.liveIDs.count > 12 ? ", …" : ""
+            print("      \(preview)\(more)")
+        }
+
+        if !report.duplicateIDs.isEmpty {
+            print("  ❌ Duplicate claims: \(report.duplicateIDs.joined(separator: ", "))")
+            print("      → Resolve by editing Markdown so each ID appears once")
+        }
+
+        if !report.unboundLiveIDs.isEmpty {
+            print("  ℹ️  Live IDs not yet in store: \(report.unboundLiveIDs.joined(separator: ", "))")
+            print("      → Run `specticus ids assign` to bind them")
+        }
+
+        if !report.drifts.isEmpty {
+            print("  ⚠️  Content drift (\(report.drifts.count); mode=\(sensitivity.rawValue)):")
+            for d in report.drifts.prefix(8) {
+                print("      \(d.id): was \"\(d.oldContent)\" → now \"\(d.newContent)\" (\(d.file))")
+            }
+            if report.drifts.count > 8 {
+                print("      … and \(report.drifts.count - 8) more")
+            }
+            print("      → `specticus ids accept-drift <ID>` after review (#66)")
+        } else if report.bindingCount > 0 {
+            print("  ✅ No content drift (mode=\(sensitivity.rawValue))")
+        }
+
+        if report.orphans.isEmpty {
+            print("  ✅ No orphan bindings")
+        } else {
+            print("  ℹ️  Orphan bindings: \(report.orphans.count) (reserve numbers; not an error — #33/#37)")
+            for o in report.orphans.prefix(12) {
+                print("      \(o.id): \(o.content)")
+            }
+            if report.orphans.count > 12 {
+                print("      … and \(report.orphans.count - 12) more")
+            }
+            print("      → Leave for audit history, or `specticus ids prune-orphans` after review")
+            print("      → Pruning removes the binding only; counters never decrease (numbers stay reserved)")
+        }
+
+        if !report.counters.isEmpty {
+            let parts = report.counters.keys.sorted().compactMap { key -> String? in
+                guard let v = report.counters[key] else { return nil }
+                return "\(key)=\(v)"
+            }
+            print("  Counters (high-water): \(parts.joined(separator: ", "))")
+        }
+
+        print("""
+
+          Divergence recovery cheat-sheet:
+            • Missing ids.json          → ids assign (bootstrap)
+            • Live ID not in store      → ids assign
+            • Content drift             → ids accept-drift <ID>
+            • Orphan (deleted heading)  → leave, or ids prune-orphans
+            • Manual ids.json edit      → ok for advanced users; prefer CLI for audit trail
+        """)
+    }
+
+    /// Remove orphan bindings from the store after explicit review (#37).
+    ///
+    /// - Removes binding entries only (content history for that ID in the store).
+    /// - **Never** lowers counters — pruned numbers remain reserved (#33).
+    /// - Writes one audit event per pruned ID; fail closed if audit cannot be written.
+    /// - Does not rewrite Markdown.
+    ///
+    /// - Parameters:
+    ///   - project: Loaded project.
+    ///   - onlyID: If set, prune only this ID (must be an orphan).
+    ///   - dryRun: Preview without writing.
+    ///   - note: Optional reason for the audit log.
+    ///   - actor: Optional audit actor override.
+    ///   - auditURL / storeURL / now: Overrides for tests.
+    @discardableResult
+    static func pruneOrphans(
+        project: SpecticusProject,
+        onlyID: String? = nil,
+        dryRun: Bool = false,
+        note: String? = nil,
+        actor: String? = nil,
+        auditURL: URL? = nil,
+        storeURL: URL? = nil,
+        now: Date = Date()
+    ) throws -> PruneOrphansResult {
+        let resolvedStoreURL = storeURL ?? project.idsURL
+        let resolvedAuditURL = auditURL ?? project.idsAuditURL
+        let resolvedActor = actor ?? currentActor()
+        let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let noteValue = (trimmedNote?.isEmpty == false) ? trimmedNote : nil
+
+        var store = loadStore(from: resolvedStoreURL)
+        // Preserve high-water marks even if we remove every binding for a prefix.
+        raiseHighWaterMarks(in: &store)
+        let countersBefore = store.counters
+
+        let headings = try collectHeadings(project: project)
+        let liveIDs = liveIDSet(from: headings)
+        let allOrphans = findOrphans(store: store, liveIDs: liveIDs)
+
+        let toPrune: [OrphanFinding]
+        if let raw = onlyID {
+            let id = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if liveIDs.contains(id) {
+                throw PruneOrphansError.idNotOrphan(
+                    id: id,
+                    reason: "it is claimed by a live Markdown heading. Remove or change the heading first, or leave the binding."
+                )
+            }
+            guard let bound = store.bindings[id] else {
+                throw PruneOrphansError.idNotOrphan(
+                    id: id,
+                    reason: "it is not present in ids.json bindings."
+                )
+            }
+            toPrune = [OrphanFinding(id: id, content: bound)]
+        } else {
+            toPrune = allOrphans
+        }
+
+        guard !toPrune.isEmpty else {
+            throw PruneOrphansError.noOrphans
+        }
+
+        if dryRun {
+            print("Would prune \(toPrune.count) orphan binding(s) (dry-run; counters unchanged):")
+            for o in toPrune {
+                print("  \(o.id): \(o.content)")
+            }
+            print("   Note: numbers remain reserved (high-water counters are not lowered — #33).")
+            return PruneOrphansResult(
+                pruned: toPrune,
+                actor: resolvedActor,
+                note: noteValue,
+                auditURL: resolvedAuditURL,
+                storeURL: resolvedStoreURL,
+                dryRun: true
+            )
+        }
+
+        // Fail closed: write all audit events before mutating the store.
+        // If any audit write fails mid-batch, do not remove any bindings.
+        var events: [AuditEvent] = []
+        events.reserveCapacity(toPrune.count)
+        for o in toPrune {
+            events.append(AuditEvent(
+                timestamp: iso8601UTCString(from: now),
+                event: "prune-orphan",
+                id: o.id,
+                oldContent: o.content,
+                newContent: "",
+                source: "ids.json (orphan)",
+                actor: resolvedActor,
+                note: noteValue
+            ))
+        }
+
+        do {
+            for event in events {
+                try appendAuditEvent(event, to: resolvedAuditURL)
+            }
+        } catch let err as AcceptDriftError {
+            // Reuse AcceptDriftError.auditWriteFailed messaging shape via our error type.
+            if case .auditWriteFailed(let message) = err {
+                throw PruneOrphansError.auditWriteFailed(message: message)
+            }
+            throw PruneOrphansError.auditWriteFailed(message: err.description)
+        } catch let err as PruneOrphansError {
+            throw err
+        } catch {
+            throw PruneOrphansError.auditWriteFailed(message: error.localizedDescription)
+        }
+
+        for o in toPrune {
+            store.bindings.removeValue(forKey: o.id)
+        }
+        // Counters must never decrease after prune (#33 / #37).
+        store.counters = countersBefore
+        raiseHighWaterMarks(in: &store)
+        // Also ensure counters cover any remaining live IDs' numbers that were only in Markdown.
+        for id in liveIDs {
+            noteObservedID(id, in: &store)
+        }
+
+        do {
+            try saveStore(store, to: resolvedStoreURL)
+        } catch {
+            throw PruneOrphansError.storeWriteFailed(message: error.localizedDescription)
+        }
+
+        print("✅ Pruned \(toPrune.count) orphan binding(s) from \(resolvedStoreURL.lastPathComponent)")
+        for o in toPrune {
+            print("   − \(o.id): \(o.content)")
+        }
+        print("📝 Appended \(toPrune.count) audit entr\(toPrune.count == 1 ? "y" : "ies") to \(resolvedAuditURL.lastPathComponent)")
+        print("💾 Updated \(resolvedStoreURL.lastPathComponent)")
+        print("   Note: counters were not lowered — pruned numbers stay reserved and will not be reused (#33).")
+
+        return PruneOrphansResult(
+            pruned: toPrune,
+            actor: resolvedActor,
+            note: noteValue,
+            auditURL: resolvedAuditURL,
+            storeURL: resolvedStoreURL,
+            dryRun: false
+        )
     }
 
     // MARK: - Helpers

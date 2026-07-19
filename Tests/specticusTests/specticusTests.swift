@@ -1966,3 +1966,355 @@ private func makeAcceptDriftFixture(
     let storeAfter = IdsManager.loadStore(from: project.idsURL)
     #expect(storeAfter.bindings["BR1"] == "User authn")
 }
+
+// MARK: - ids.json lifecycle (#37)
+
+/// Fixture for lifecycle tests: live BR1 + orphan BR2 by default.
+private func makeLifecycleFixture(
+    markdownBody: String = """
+    # Overview
+    ## BR1: Still Live
+    """,
+    bindingsJSON: String = """
+    {
+      "version": 1,
+      "counters": { "BR": 2 },
+      "bindings": {
+        "BR1": "Still Live",
+        "BR2": "Deleted requirement"
+      }
+    }
+    """,
+    configYAML: String = """
+    version: 1
+    ids:
+      drift_sensitivity: strict
+    """,
+    writeStore: Bool = true
+) throws -> (tmp: URL, mdURL: URL, project: SpecticusProject) {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-lifecycle-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+
+    let mdURL = tmp.appendingPathComponent("007-business-requirements.md")
+    try markdownBody.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try configYAML.write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+    if writeStore {
+        try bindingsJSON.write(to: specticusDir.appendingPathComponent("ids.json"), atomically: true, encoding: .utf8)
+    }
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    return (tmp, mdURL, project)
+}
+
+@Test func lifecycleFindOrphansDetectsStoreOnlyBindings() throws {
+    let fm = FileManager.default
+    let (tmp, _, project) = try makeLifecycleFixture()
+    defer { try? fm.removeItem(at: tmp) }
+
+    let headings = try IdsManager.collectHeadings(project: project)
+    let store = IdsManager.loadStore(from: project.idsURL)
+    let orphans = IdsManager.findOrphans(store: store, liveIDs: IdsManager.liveIDSet(from: headings))
+
+    #expect(orphans.count == 1)
+    #expect(orphans[0].id == "BR2")
+    #expect(orphans[0].content == "Deleted requirement")
+}
+
+@Test func lifecycleReportSurfacesOrphansDriftAndLive() throws {
+    let fm = FileManager.default
+    let (tmp, _, project) = try makeLifecycleFixture(
+        markdownBody: """
+        # Overview
+        ## BR1: Renamed Live
+        """,
+        bindingsJSON: """
+        {
+          "version": 1,
+          "counters": { "BR": 2 },
+          "bindings": {
+            "BR1": "Still Live",
+            "BR2": "Deleted requirement"
+          }
+        }
+        """
+    )
+    defer { try? fm.removeItem(at: tmp) }
+
+    let report = try IdsManager.lifecycleReport(project: project)
+    #expect(report.storeExists)
+    #expect(report.liveIDs == ["BR1"])
+    #expect(report.orphans.map(\.id) == ["BR2"])
+    #expect(report.drifts.count == 1)
+    #expect(report.drifts[0].id == "BR1")
+    #expect(report.bindingCount == 2)
+    #expect((report.counters["BR"] ?? 0) >= 2)
+}
+
+@Test func lifecycleMissingStoreReportedAndRecoveredByAssign() throws {
+    let fm = FileManager.default
+    let (tmp, _, project) = try makeLifecycleFixture(
+        markdownBody: """
+        # Overview
+        ## BR1: User Login
+        ## BR3: Offline Mode
+        """,
+        writeStore: false
+    )
+    defer { try? fm.removeItem(at: tmp) }
+
+    #expect(!fm.fileExists(atPath: project.idsURL.path))
+
+    let reportBefore = try IdsManager.lifecycleReport(project: project)
+    #expect(!reportBefore.storeExists)
+    #expect(reportBefore.liveIDs == ["BR1", "BR3"])
+    #expect(reportBefore.unboundLiveIDs == ["BR1", "BR3"])
+    #expect(reportBefore.orphans.isEmpty)
+
+    // Recovery path: assign bootstraps bindings + counters from Markdown
+    try IdsManager.assignIDs(project: project, dryRun: false)
+
+    #expect(fm.fileExists(atPath: project.idsURL.path))
+    let store = IdsManager.loadStore(from: project.idsURL)
+    #expect(store.bindings["BR1"] == "User Login")
+    #expect(store.bindings["BR3"] == "Offline Mode")
+    // Gap BR2 is intentional — high-water from live IDs is 3
+    #expect((store.counters["BR"] ?? 0) >= 3)
+    #expect(store.bindings["BR2"] == nil)
+
+    let reportAfter = try IdsManager.lifecycleReport(project: project)
+    #expect(reportAfter.storeExists)
+    #expect(reportAfter.unboundLiveIDs.isEmpty)
+    #expect(reportAfter.orphans.isEmpty)
+}
+
+@Test func lifecyclePruneOrphansRemovesBindingKeepsCounter() throws {
+    let fm = FileManager.default
+    let (tmp, mdURL, project) = try makeLifecycleFixture()
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdBefore = try String(contentsOf: mdURL, encoding: .utf8)
+    let fixedNow = Date(timeIntervalSince1970: 1_700_000_100)
+
+    let result = try IdsManager.pruneOrphans(
+        project: project,
+        dryRun: false,
+        note: "retired under CR-99",
+        actor: "tester",
+        now: fixedNow
+    )
+
+    #expect(result.dryRun == false)
+    #expect(result.pruned.count == 1)
+    #expect(result.pruned[0].id == "BR2")
+    #expect(result.note == "retired under CR-99")
+
+    let storeAfter = IdsManager.loadStore(from: project.idsURL)
+    #expect(storeAfter.bindings["BR2"] == nil)
+    #expect(storeAfter.bindings["BR1"] == "Still Live")
+    // Counter must not drop below the pruned high-water (was 2)
+    #expect((storeAfter.counters["BR"] ?? 0) >= 2)
+
+    // Markdown untouched
+    let mdAfter = try String(contentsOf: mdURL, encoding: .utf8)
+    #expect(mdAfter == mdBefore)
+
+    let events = try IdsManager.loadAuditEvents(from: project.idsAuditURL)
+    #expect(events.count == 1)
+    #expect(events[0].event == "prune-orphan")
+    #expect(events[0].id == "BR2")
+    #expect(events[0].oldContent == "Deleted requirement")
+    #expect(events[0].newContent == "")
+    #expect(events[0].actor == "tester")
+    #expect(events[0].note == "retired under CR-99")
+
+    // Pruned number must not be reused
+    try """
+    # Overview
+    ## BR1: Still Live
+    ## New Requirement
+    """.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    try IdsManager.assignIDs(project: project, dryRun: false)
+    let storeAssigned = IdsManager.loadStore(from: project.idsURL)
+    let newBinding = storeAssigned.bindings.first { $0.value == "New Requirement" }
+    #expect(newBinding != nil)
+    #expect(newBinding?.key != "BR2")
+    if let key = newBinding?.key, let num = Int(key.dropFirst(2)) {
+        #expect(num >= 3)
+    }
+}
+
+@Test func lifecyclePruneOrphansDryRunDoesNotWrite() throws {
+    let fm = FileManager.default
+    let (tmp, _, project) = try makeLifecycleFixture()
+    defer { try? fm.removeItem(at: tmp) }
+
+    let storeBefore = IdsManager.loadStore(from: project.idsURL)
+    let result = try IdsManager.pruneOrphans(project: project, dryRun: true, actor: "tester")
+    #expect(result.dryRun)
+    #expect(result.pruned.map(\.id) == ["BR2"])
+
+    let storeAfter = IdsManager.loadStore(from: project.idsURL)
+    #expect(storeAfter == storeBefore)
+    #expect(!fm.fileExists(atPath: project.idsAuditURL.path))
+}
+
+@Test func lifecyclePruneSingleIDOnly() throws {
+    let fm = FileManager.default
+    let (tmp, _, project) = try makeLifecycleFixture(
+        markdownBody: """
+        # Overview
+        ## BR1: Live One
+        """,
+        bindingsJSON: """
+        {
+          "version": 1,
+          "counters": { "BR": 3 },
+          "bindings": {
+            "BR1": "Live One",
+            "BR2": "Orphan Two",
+            "BR3": "Orphan Three"
+          }
+        }
+        """
+    )
+    defer { try? fm.removeItem(at: tmp) }
+
+    _ = try IdsManager.pruneOrphans(project: project, onlyID: "BR2", actor: "tester")
+
+    let storeAfter = IdsManager.loadStore(from: project.idsURL)
+    #expect(storeAfter.bindings["BR2"] == nil)
+    #expect(storeAfter.bindings["BR3"] == "Orphan Three")
+    #expect(storeAfter.bindings["BR1"] == "Live One")
+    #expect((storeAfter.counters["BR"] ?? 0) >= 3)
+
+    let events = try IdsManager.loadAuditEvents(from: project.idsAuditURL)
+    #expect(events.count == 1)
+    #expect(events[0].id == "BR2")
+}
+
+@Test func lifecyclePruneRejectsLiveID() throws {
+    let fm = FileManager.default
+    let (tmp, _, project) = try makeLifecycleFixture()
+    defer { try? fm.removeItem(at: tmp) }
+
+    var threw = false
+    do {
+        _ = try IdsManager.pruneOrphans(project: project, onlyID: "BR1", actor: "tester")
+    } catch let error as IdsManager.PruneOrphansError {
+        threw = true
+        guard case .idNotOrphan(let id, _) = error else {
+            Issue.record("Expected idNotOrphan, got \(error)")
+            return
+        }
+        #expect(id == "BR1")
+    }
+    #expect(threw)
+
+    let storeAfter = IdsManager.loadStore(from: project.idsURL)
+    #expect(storeAfter.bindings["BR1"] == "Still Live")
+    #expect(storeAfter.bindings["BR2"] == "Deleted requirement")
+    #expect(!fm.fileExists(atPath: project.idsAuditURL.path))
+}
+
+@Test func lifecyclePruneNoOrphansErrors() throws {
+    let fm = FileManager.default
+    let (tmp, _, project) = try makeLifecycleFixture(
+        markdownBody: """
+        # Overview
+        ## BR1: Still Live
+        """,
+        bindingsJSON: """
+        {
+          "version": 1,
+          "counters": { "BR": 1 },
+          "bindings": { "BR1": "Still Live" }
+        }
+        """
+    )
+    defer { try? fm.removeItem(at: tmp) }
+
+    var threw = false
+    do {
+        _ = try IdsManager.pruneOrphans(project: project, actor: "tester")
+    } catch let error as IdsManager.PruneOrphansError {
+        threw = true
+        guard case .noOrphans = error else {
+            Issue.record("Expected noOrphans, got \(error)")
+            return
+        }
+    }
+    #expect(threw)
+}
+
+@Test func lifecyclePruneAuditFailureDoesNotUpdateStore() throws {
+    let fm = FileManager.default
+    let (tmp, _, project) = try makeLifecycleFixture()
+    defer { try? fm.removeItem(at: tmp) }
+
+    try fm.createDirectory(at: project.idsAuditURL, withIntermediateDirectories: true)
+    let storeBefore = IdsManager.loadStore(from: project.idsURL)
+
+    var threw = false
+    do {
+        _ = try IdsManager.pruneOrphans(project: project, actor: "tester")
+    } catch let error as IdsManager.PruneOrphansError {
+        threw = true
+        guard case .auditWriteFailed = error else {
+            Issue.record("Expected auditWriteFailed, got \(error)")
+            return
+        }
+    }
+    #expect(threw)
+
+    let storeAfter = IdsManager.loadStore(from: project.idsURL)
+    #expect(storeAfter == storeBefore)
+    #expect(storeAfter.bindings["BR2"] == "Deleted requirement")
+}
+
+@Test func lifecycleAssignDoesNotDropOrphans() throws {
+    let fm = FileManager.default
+    let (tmp, _, project) = try makeLifecycleFixture()
+    defer { try? fm.removeItem(at: tmp) }
+
+    try IdsManager.assignIDs(project: project, dryRun: false)
+
+    let store = IdsManager.loadStore(from: project.idsURL)
+    #expect(store.bindings["BR2"] == "Deleted requirement")
+    #expect(store.bindings["BR1"] == "Still Live")
+    #expect((store.counters["BR"] ?? 0) >= 2)
+}
+
+@Test func lifecycleUnboundLiveIDsBoundByAssign() throws {
+    // Markdown has BR5; store only knows BR1 — assign should bind BR5 without reusing.
+    let fm = FileManager.default
+    let (tmp, _, project) = try makeLifecycleFixture(
+        markdownBody: """
+        # Overview
+        ## BR1: Known
+        ## BR5: Manual ID
+        """,
+        bindingsJSON: """
+        {
+          "version": 1,
+          "counters": { "BR": 1 },
+          "bindings": { "BR1": "Known" }
+        }
+        """
+    )
+    defer { try? fm.removeItem(at: tmp) }
+
+    let reportBefore = try IdsManager.lifecycleReport(project: project)
+    #expect(reportBefore.unboundLiveIDs == ["BR5"])
+
+    try IdsManager.assignIDs(project: project, dryRun: false)
+
+    let store = IdsManager.loadStore(from: project.idsURL)
+    #expect(store.bindings["BR5"] == "Manual ID")
+    #expect((store.counters["BR"] ?? 0) >= 5)
+}

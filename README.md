@@ -48,8 +48,14 @@ specticus lint
 # Manage traceability IDs
 specticus ids assign
 
+# Inspect store vs Markdown (orphans, drift, recovery hints)
+specticus ids status
+
 # After review: rebind one drifted ID to its new heading text (same ID)
 specticus ids accept-drift BR1
+
+# After review: drop orphan bindings for deleted headings (numbers stay reserved)
+specticus ids prune-orphans
 ```
 
 ## Commands
@@ -61,7 +67,9 @@ specticus ids accept-drift BR1
 | `lint`               | Validate structure and IDs                                       |
 | `clean`              | Remove generated output                                          |
 | `ids assign`         | Assign missing traceability IDs                                  |
+| `ids status`         | Report ids.json lifecycle (live IDs, orphans, drift)             |
 | `ids accept-drift`   | Accept content drift for one ID (same-identity reword + audit)   |
+| `ids prune-orphans`  | Remove orphan bindings (counters never decrease)                 |
 | `ids`                | Manage traceability IDs (group command)                          |
 
 Run `specticus --help` or `specticus <command> --help` for details.
