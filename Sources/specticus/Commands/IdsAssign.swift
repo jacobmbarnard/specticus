@@ -13,13 +13,15 @@ struct IdsAssign: ParsableCommand {
             New numbers are (per-prefix max)+1, never reused (#33). Orphan bindings (deleted \
             headings) are reported but left in place; use `ids status` / `ids prune-orphans` (#37).
 
-            Source mutation safety (#35):
+            Source mutation safety (#35 / #38):
             - Assign rewrites Markdown **in place** when new IDs are needed.
             - Prefer `specticus ids assign --dry-run` (add `--diff` for line-level patches) first.
             - Interactive sessions prompt before rewriting unless `--yes` is passed.
             - Non-interactive sessions require `--yes` to rewrite source files.
             - Git dirty paths that will be modified are reported as warnings.
             - Missing ids.json is recovered by bootstrapping from live Markdown IDs.
+            - Build does not mutate sources when ids.auto_assign is true alone (#38);
+              use `specticus build --assign-ids` only when you intentionally want that.
             """
     )
 

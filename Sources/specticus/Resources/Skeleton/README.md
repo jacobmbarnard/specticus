@@ -11,6 +11,12 @@ specticus build
 
 # or force a single file:
 specticus build --input welcome-template.md
+
+# Traceability IDs (assign rewrites Markdown — preview first):
+# specticus ids assign --dry-run
+# specticus ids assign --yes
+# ids.auto_assign in .specticus/config.yml only reports during build;
+# mutation requires: specticus build --assign-ids  (avoid in CI unless intentional)
 ```
 
 ## Contents

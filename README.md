@@ -60,12 +60,25 @@ specticus ids accept-drift BR1
 specticus ids prune-orphans
 ```
 
+### `ids.auto_assign` and build safety
+
+`ids.auto_assign` in `.specticus/config.yml` is **report-only during build**. With it enabled, `specticus build` prints a dry-run of pending ID assignments but **does not rewrite Markdown**.
+
+To mutate sources as part of a build you must pass an **explicit** flag:
+
+```bash
+specticus build --assign-ids   # ⚠️ rewrites Markdown in place
+```
+
+Avoid `--assign-ids` in CI or shared checkouts unless that is intentional. Prefer the dedicated `ids assign` workflow above. Default config leaves `auto_assign: false` so build stays purely generative (HTML/assets only).
+
 ## Commands
 
 | Command              | Description                                                      |
 |----------------------|------------------------------------------------------------------|
 | `init`               | Initialize a new specticus project                               |
 | `build`              | Generate HTML documentation                                      |
+| `build --assign-ids` | Build **and** run `ids assign` (rewrites Markdown; opt-in, #38)  |
 | `lint`               | Validate structure and IDs                                       |
 | `clean`              | Remove generated output                                          |
 | `ids assign`         | Assign missing IDs (rewrites Markdown; use `--dry-run` / `--yes`) |

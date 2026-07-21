@@ -33,9 +33,18 @@ decision_records:
   bdrs_enabled: true
 
 ids:
-  # When true, specticus ids assign may be invoked automatically on build (#6).
+  # auto_assign safety (#38) — READ BEFORE ENABLING
+  # When true, `specticus build` only REPORTS pending ID assignments (dry-run).
+  # It does NOT rewrite Markdown sources by itself.
+  # To actually assign during build you must pass an explicit flag:
+  #   specticus build --assign-ids
+  # That flag REWRITES Markdown in place — avoid in CI / shared checkouts unless intentional.
+  # Safer workflow (recommended):
+  #   specticus ids assign --dry-run
+  #   specticus ids assign --yes
+  # Default false keeps build purely generative (HTML/assets only).
   # IDs use simple form BR1 / TS2 / ADR3 (no dash, no zero-padding). Must be unique.
-  # Drift detection and warnings apply in ids assign, lint, and build.
+  # Drift detection and warnings apply in ids assign, lint, and build (#6).
   auto_assign: false
   # ATX heading levels 1…heading_max_level may own traceability IDs (#32).
   # Default 2 = H1 and H2 only. Raise to 3…6 to include deeper headings (e.g. nested test cases).
