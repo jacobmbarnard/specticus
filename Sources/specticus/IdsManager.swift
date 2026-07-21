@@ -188,9 +188,34 @@ enum IdsManager {
         let title: String
     }
 
-    // MARK: - Assign options & safety (#35)
+    // MARK: - Assign options & safety (#35 / #38)
 
-    /// Options for `ids assign` write safety and UX (#35).
+    /// How `specticus build` may invoke ID assignment (#38).
+    ///
+    /// `ids.auto_assign: true` alone never rewrites Markdown during build — it only reports.
+    /// Actual source mutation requires an explicit `specticus build --assign-ids` (or a separate
+    /// `specticus ids assign --yes`). This reduces foot-guns in CI and shared repos.
+    enum BuildAssignMode: String, Equatable, Sendable {
+        /// Do not run assign during build.
+        case off
+        /// `ids.auto_assign` is on: dry-run report only (no writes).
+        case reportOnly
+        /// Explicit `--assign-ids`: may rewrite Markdown in place.
+        case mutate
+    }
+
+    /// Resolve build-time assign policy from config + CLI (#38).
+    ///
+    /// - `--assign-ids` always wins (explicit consent for this invocation).
+    /// - Else `ids.auto_assign: true` → report-only dry-run.
+    /// - Else off.
+    static func resolveBuildAssignMode(autoAssign: Bool, assignIdsFlag: Bool) -> BuildAssignMode {
+        if assignIdsFlag { return .mutate }
+        if autoAssign { return .reportOnly }
+        return .off
+    }
+
+    /// Options for `ids assign` write safety and UX (#35 / #38).
     ///
     /// Programmatic / test callers typically use `assumeYes: true` (default) so confirmation
     /// is not required. The CLI sets `assumeYes` from `--yes` and enables interactive prompts.
@@ -206,11 +231,40 @@ enum IdsManager {
         var isInteractive: Bool? = nil
         /// Override confirmation prompt. Return `true` to proceed. Used by tests.
         var confirmHandler: (@Sendable (String) -> Bool)? = nil
-        /// When true, print a stronger banner (e.g. build-time `ids.auto_assign`).
+        /// When true, print a stronger banner (e.g. build-time assign).
         var autoAssignContext: Bool = false
+        /// Build-time mode for banner wording (#38). Ignored unless `autoAssignContext` is true.
+        var buildAssignMode: BuildAssignMode? = nil
 
         static func dryRunOnly(showDiff: Bool = false) -> AssignOptions {
             AssignOptions(dryRun: true, assumeYes: true, showDiff: showDiff)
+        }
+
+        /// Options for build-time assign under #38 policy.
+        static func forBuild(mode: BuildAssignMode) -> AssignOptions {
+            switch mode {
+            case .off:
+                // Caller should not invoke assign; defensive defaults.
+                return AssignOptions(dryRun: true, assumeYes: true, autoAssignContext: false)
+            case .reportOnly:
+                return AssignOptions(
+                    dryRun: true,
+                    assumeYes: true,
+                    showDiff: false,
+                    checkGit: false,
+                    autoAssignContext: true,
+                    buildAssignMode: .reportOnly
+                )
+            case .mutate:
+                return AssignOptions(
+                    dryRun: false,
+                    assumeYes: true,
+                    showDiff: false,
+                    checkGit: true,
+                    autoAssignContext: true,
+                    buildAssignMode: .mutate
+                )
+            }
         }
     }
 
@@ -243,11 +297,30 @@ enum IdsManager {
         let sensitivity = project.config.ids.driftSensitivity
 
         if options.autoAssignContext {
-            print("""
-                ⚠️  ids.auto_assign is enabled — build will run `ids assign` and may REWRITE Markdown sources in place (#35).
-                   Disable with `ids.auto_assign: false` in .specticus/config.yml if this is unexpected.
-                   Safer workflow: `specticus ids assign --dry-run` then `specticus ids assign --yes`.
-                """)
+            switch options.buildAssignMode {
+            case .reportOnly:
+                print("""
+                    ⚠️  ids.auto_assign is enabled — build is reporting pending ID assignments only (#38).
+                       Markdown sources will NOT be rewritten during this build.
+                       To apply assignments on build:  specticus build --assign-ids
+                       Or assign explicitly:           specticus ids assign --dry-run
+                                                       specticus ids assign --yes
+                       Disable reporting: set ids.auto_assign: false in .specticus/config.yml
+                       ⚠️  --assign-ids REWRITES Markdown in place (dangerous in CI / shared checkouts).
+                    """)
+            case .mutate:
+                print("""
+                    🚨 BUILD --assign-ids: will run `ids assign` and may REWRITE Markdown sources in place (#38).
+                       This is intentional only when you opted in with the flag (and/or ids.auto_assign).
+                       Prefer a dedicated `specticus ids assign --dry-run` then `--yes` workflow in CI.
+                       Review the git diff before committing any rewritten sources.
+                    """)
+            case .off, nil:
+                print("""
+                    ⚠️  Build-time ID assign context (#35/#38).
+                       Prefer: specticus ids assign --dry-run  then  specticus ids assign --yes
+                    """)
+            }
         }
 
         let headings = try collectHeadings(project: project)
@@ -538,7 +611,9 @@ enum IdsManager {
 
     /// Whether stdin is attached to a terminal (interactive session).
     static func isInteractiveTerminal() -> Bool {
-        isatty(fileno(stdin)) != 0
+        // Prefer STDIN_FILENO over `stdin` — the latter is a mutable global and
+        // trips Swift 6 concurrency diagnostics on Linux.
+        isatty(STDIN_FILENO) != 0
     }
 
     /// Prompt on stdout/stdin for y/N. Empty or anything other than y/yes is false.

@@ -164,7 +164,16 @@ struct Lint: ParsableCommand {
                  suggestion: "Run with a specific --input or ensure numbered .md files (or welcome-template.md) are present and readable. Error: \(error.localizedDescription)")
         }
 
-        // --- Traceability IDs (#6 / #36)
+        // --- Traceability IDs (#6 / #36 / #38)
+        if project.config.ids.autoAssign {
+            warn(
+                "ids.auto_assign is true — build will REPORT pending ID assignments (dry-run only)",
+                suggestion: "Sources are not rewritten unless you pass `specticus build --assign-ids` (#38). Prefer `specticus ids assign --dry-run` then `--yes`. Never enable --assign-ids in shared CI unless intentional."
+            )
+        } else {
+            ok("ids.auto_assign is false (build will not run ID assign; safe default — #38)")
+        }
+
         do {
             let headings = try IdsManager.collectHeadings(project: project)
             var idToHeadings: [String: [IdsManager.HeadingInfo]] = [:]
@@ -245,7 +254,7 @@ struct Lint: ParsableCommand {
         print("\n  ℹ️  External tools:")
         print("      • Mermaid diagrams: rendered client-side in the output HTML (no CLI tool required).")
         print("      • For advanced Mermaid CLI rendering you can optionally install @mermaid-js/mermaid-cli.")
-        print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, asset copy, diagrams, build tracking (#8), and ID traceability settings (#6; #32 heading levels; #33 counters; #36 drift_sensitivity; #37 ids.json lifecycle). Lint enforces ID uniqueness, drift, plain-text headings, and reports orphans.")
+        print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, asset copy, diagrams, build tracking (#8), and ID traceability settings (#6; #32 heading levels; #33 counters; #36 drift_sensitivity; #37 ids.json lifecycle; #38 auto_assign is report-only on build — mutation needs --assign-ids). Lint enforces ID uniqueness, drift, plain-text headings, and reports orphans.")
         if project.hasSpecticusDirectory {
             if FileManager.default.fileExists(atPath: project.buildNumberURL.path) {
                 if let record = try? BuildTracker.load(from: project.buildNumberURL) {

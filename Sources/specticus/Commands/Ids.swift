@@ -14,7 +14,8 @@ struct Ids: ParsableCommand {
             rewording after review (#66). Orphan bindings (deleted headings) reserve numbers; \
             inspect with `ids status`, prune after review with `ids prune-orphans` (#37). \
             `ids assign` rewrites Markdown in place — preview with `--dry-run` / `--diff`, \
-            confirm with `--yes` when non-interactive (#35).
+            confirm with `--yes` when non-interactive (#35). Build-time ids.auto_assign is \
+            report-only; mutation requires `specticus build --assign-ids` (#38).
             """,
         subcommands: [
             IdsAssign.self,

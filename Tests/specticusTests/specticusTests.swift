@@ -2572,3 +2572,116 @@ private func makeLifecycleFixture(
     #expect(mdAfter.contains("requirement"))
     #expect(mdAfter.contains("BR"))
 }
+
+// MARK: - Build-time auto_assign safety (#38)
+
+@Test func buildAssignModeResolution() {
+    // Default: no config, no flag → off
+    #expect(IdsManager.resolveBuildAssignMode(autoAssign: false, assignIdsFlag: false) == .off)
+    // auto_assign alone → report-only (never mutate)
+    #expect(IdsManager.resolveBuildAssignMode(autoAssign: true, assignIdsFlag: false) == .reportOnly)
+    // Explicit flag → mutate even without auto_assign
+    #expect(IdsManager.resolveBuildAssignMode(autoAssign: false, assignIdsFlag: true) == .mutate)
+    // Both → mutate (flag is the write gate)
+    #expect(IdsManager.resolveBuildAssignMode(autoAssign: true, assignIdsFlag: true) == .mutate)
+}
+
+@Test func buildAssignOptionsForReportOnlyAreDryRun() {
+    let opts = IdsManager.AssignOptions.forBuild(mode: .reportOnly)
+    #expect(opts.dryRun == true)
+    #expect(opts.assumeYes == true)
+    #expect(opts.autoAssignContext == true)
+    #expect(opts.buildAssignMode == .reportOnly)
+    #expect(opts.checkGit == false)
+}
+
+@Test func buildAssignOptionsForMutateAllowWrite() {
+    let opts = IdsManager.AssignOptions.forBuild(mode: .mutate)
+    #expect(opts.dryRun == false)
+    #expect(opts.assumeYes == true)
+    #expect(opts.autoAssignContext == true)
+    #expect(opts.buildAssignMode == .mutate)
+    #expect(opts.checkGit == true)
+}
+
+@Test func buildAutoAssignReportOnlyDoesNotRewriteMarkdown() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-auto-assign-report-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-business-requirements.md")
+    try """
+    # Overview
+    ## User Login requirement
+    """.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try """
+    version: 1
+    ids:
+      auto_assign: true
+    """.write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    #expect(project.config.ids.autoAssign == true)
+
+    let mode = IdsManager.resolveBuildAssignMode(
+        autoAssign: project.config.ids.autoAssign,
+        assignIdsFlag: false
+    )
+    #expect(mode == .reportOnly)
+
+    let mdBefore = try String(contentsOf: mdURL, encoding: .utf8)
+    try IdsManager.assignIDs(project: project, options: .forBuild(mode: mode))
+
+    let mdAfter = try String(contentsOf: mdURL, encoding: .utf8)
+    #expect(mdAfter == mdBefore)
+    #expect(!fm.fileExists(atPath: project.idsURL.path))
+    #expect(!mdAfter.contains("BR1:"))
+}
+
+@Test func buildAssignIdsFlagRewritesMarkdown() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-auto-assign-mutate-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-business-requirements.md")
+    try """
+    # Overview
+    ## User Login requirement
+    """.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    // auto_assign false — --assign-ids is still an explicit one-shot mutate
+    try """
+    version: 1
+    ids:
+      auto_assign: false
+    """.write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let mode = IdsManager.resolveBuildAssignMode(
+        autoAssign: project.config.ids.autoAssign,
+        assignIdsFlag: true
+    )
+    #expect(mode == .mutate)
+
+    try IdsManager.assignIDs(project: project, options: .forBuild(mode: mode))
+
+    let mdAfter = try String(contentsOf: mdURL, encoding: .utf8)
+    #expect(mdAfter.contains("BR") && mdAfter.contains("User Login requirement"))
+    #expect(fm.fileExists(atPath: project.idsURL.path))
+}
+
+@Test func configAutoAssignDefaultIsFalseAndDocumentedSafe() throws {
+    // Missing key → false (safe default: build never reports/mutates IDs)
+    let partial = try SpecticusConfig.parse(yaml: "version: 1\n")
+    #expect(partial.ids.autoAssign == false)
+    #expect(SpecticusConfig.default.ids.autoAssign == false)
+}

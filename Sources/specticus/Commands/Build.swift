@@ -14,6 +14,11 @@ struct Build: ParsableCommand {
         Headings are auto-numbered hierarchically through level 3 by default (#4; config up to 6). \
         A hyperlinked table of contents is injected by default (#12). \
         Use `specticus lint` first to validate. CLI flags override config values.
+
+        Traceability IDs / auto_assign safety (#38):
+        - ids.auto_assign: true only reports pending ID assignments during build (dry-run; no source writes).
+        - Actual Markdown mutation on build requires explicit --assign-ids (dangerous in CI/shared repos).
+        - Safer default workflow: specticus ids assign --dry-run  then  specticus ids assign --yes.
         """
     )
 
@@ -37,6 +42,16 @@ struct Build: ParsableCommand {
 
     @Flag(name: .long, help: "Do not generate a table of contents (overrides build.toc)")
     var skipToc: Bool = false
+
+    @Flag(
+        name: .long,
+        help: """
+            Explicitly run ids assign and allow rewriting Markdown sources in place during build (#38). \
+            Without this flag, ids.auto_assign only prints a dry-run report. Prefer \
+            `specticus ids assign --dry-run` / `--yes` over baking mutation into CI builds.
+            """
+    )
+    var assignIds: Bool = false
 
     func run() throws {
         let project = try SpecticusProject.load()
@@ -150,22 +165,26 @@ struct Build: ParsableCommand {
             print("⚠️  Could not validate traceability IDs during build: \(error.localizedDescription)")
         }
 
-        if project.config.ids.autoAssign {
-            // Build-time auto-assign is inherently non-interactive; assumeYes with a strong
-            // safety banner (#35). Deeper auto_assign policy/UX lives in #38.
+        // Traceability assign during build (#38): report-only unless --assign-ids.
+        // ids.auto_assign alone never mutates sources (CI / shared-repo foot-gun).
+        let assignMode = IdsManager.resolveBuildAssignMode(
+            autoAssign: project.config.ids.autoAssign,
+            assignIdsFlag: assignIds
+        )
+        if assignMode != .off {
+            if assignMode == .mutate && !project.config.ids.autoAssign {
+                print("""
+                    ℹ️  --assign-ids without ids.auto_assign: one-shot source mutation for this build (#38).
+                       Consider enabling ids.auto_assign only if you want dry-run reports on every build.
+                    """)
+            }
             do {
                 try IdsManager.assignIDs(
                     project: project,
-                    options: IdsManager.AssignOptions(
-                        dryRun: false,
-                        assumeYes: true,
-                        showDiff: false,
-                        checkGit: true,
-                        autoAssignContext: true
-                    )
+                    options: .forBuild(mode: assignMode)
                 )
             } catch {
-                print("⚠️  Auto-assign encountered an issue: \(error.localizedDescription)")
+                print("⚠️  Build-time ID assign encountered an issue: \(error.localizedDescription)")
             }
         }
     }
