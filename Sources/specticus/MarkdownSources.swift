@@ -68,6 +68,101 @@ enum MarkdownSources {
         guard !title.isEmpty else { return nil }
         return (hashes.count, title)
     }
+
+    // MARK: - Unresolved merge conflict markers (#39, SCM-agnostic)
+
+    /// Kind of unresolved VCS merge conflict marker found in a source file.
+    ///
+    /// Markers are plain-text conventions shared by Git, Mercurial, Fossil, SVN, and
+    /// similar tools. specticus does **not** invoke any SCM — it only inspects file text.
+    enum ConflictMarkerKind: String, Equatable, Sendable {
+        case start   // <<<<<<<
+        case middle  // ======= (only when start/end also present in the same file)
+        case end     // >>>>>>>
+    }
+
+    /// One conflict-marker hit (file + 1-based line + kind).
+    struct ConflictMarkerFinding: Equatable, Sendable {
+        let file: String
+        let lineIndex: Int
+        let kind: ConflictMarkerKind
+        let linePreview: String
+    }
+
+    /// True when a trimmed line is an unambiguous conflict start (`<<<<<<<…`).
+    static func isConflictStartMarker(_ trimmedLine: String) -> Bool {
+        trimmedLine.hasPrefix("<<<<<<<")
+    }
+
+    /// True when a trimmed line is an unambiguous conflict end (`>>>>>>>…`).
+    static func isConflictEndMarker(_ trimmedLine: String) -> Bool {
+        trimmedLine.hasPrefix(">>>>>>>")
+    }
+
+    /// True when a trimmed line is a bare conflict separator (`=======` only).
+    ///
+    /// Requires the whole line (after trim) to be seven or more `=` characters so we
+    /// do not flag ordinary Markdown setext underlines that sit under a title on the
+    /// previous line without accompanying `<<<<<<<` / `>>>>>>>` (see `findConflictMarkers`).
+    static func isConflictMiddleMarker(_ trimmedLine: String) -> Bool {
+        guard trimmedLine.count >= 7 else { return false }
+        return trimmedLine.allSatisfy { $0 == "=" }
+    }
+
+    /// Scan text for unresolved merge conflict markers (#39).
+    ///
+    /// - `<<<<<<<` / `>>>>>>>` always count.
+    /// - Bare `=======` lines count only when the same file also has a start or end
+    ///   marker, reducing false positives on setext-style underlines.
+    static func findConflictMarkers(in text: String, fileDisplayName: String) -> [ConflictMarkerFinding] {
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        var startsAndEnds: [(idx: Int, kind: ConflictMarkerKind, preview: String)] = []
+        var middles: [(idx: Int, preview: String)] = []
+
+        for (idx, line) in lines.enumerated() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if isConflictStartMarker(trimmed) {
+                startsAndEnds.append((idx, .start, trimmed))
+            } else if isConflictEndMarker(trimmed) {
+                startsAndEnds.append((idx, .end, trimmed))
+            } else if isConflictMiddleMarker(trimmed) {
+                middles.append((idx, trimmed))
+            }
+        }
+
+        var findings: [ConflictMarkerFinding] = []
+        for item in startsAndEnds {
+            findings.append(ConflictMarkerFinding(
+                file: fileDisplayName,
+                lineIndex: item.idx,
+                kind: item.kind,
+                linePreview: item.preview
+            ))
+        }
+        // Only attach middle markers when the file is clearly in a conflicted state.
+        if !startsAndEnds.isEmpty {
+            for m in middles {
+                findings.append(ConflictMarkerFinding(
+                    file: fileDisplayName,
+                    lineIndex: m.idx,
+                    kind: .middle,
+                    linePreview: m.preview
+                ))
+            }
+        }
+
+        return findings.sorted { lhs, rhs in
+            if lhs.lineIndex != rhs.lineIndex { return lhs.lineIndex < rhs.lineIndex }
+            return lhs.kind.rawValue < rhs.kind.rawValue
+        }
+    }
+
+    /// Scan a file on disk; returns empty if unreadable or missing.
+    static func findConflictMarkers(inFile url: URL, displayName: String? = nil) -> [ConflictMarkerFinding] {
+        let name = displayName ?? url.lastPathComponent
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { return [] }
+        return findConflictMarkers(in: text, fileDisplayName: name)
+    }
 }
 
 // MARK: - Git workspace helpers for assign safety (#35)

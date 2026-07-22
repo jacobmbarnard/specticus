@@ -28,6 +28,14 @@ import Glibc
 //   counters (numbers stay reserved forever under #33).
 // - **Manual ids.json edits**: allowed for advanced users; assign re-raises high-water marks
 //   from bindings + counters. Prefer CLI for rebind/prune so audit history is preserved.
+//
+// Collaboration hazards (#39) — SCM-agnostic:
+// - specticus never shells out to Git/Fossil/SVN/etc. for collaboration safety.
+// - Unresolved merge conflict markers (`<<<<<<<` / `>>>>>>>` / conditional `=======`) in
+//   content Markdown or ids.json block assign writes and fail lint; build/status warn.
+// - Duplicate live ID claims (classic concurrent-assign merge fallout) are treated as
+//   hard problems on assign/lint and warned on build.
+// - Optional git dirty-path hints from #35 remain convenience-only and are not required.
 
 enum IdsManager {
     static let knownPrefixes: [String] = ["BR", "TS", "UC", "ADR", "BDR", "TC", "BC", "REF", "DIAG", "REV"]
@@ -188,6 +196,158 @@ enum IdsManager {
         let title: String
     }
 
+    // MARK: - Collaboration hazards (#39, SCM-agnostic)
+
+    /// Snapshot of collaboration / merge-fallout signals for assign, lint, build, status.
+    ///
+    /// Detection is **content-based** only — no SCM integration. Teams using any VCS
+    /// (or none) get the same advice when sources contain conflict markers or duplicate IDs.
+    struct CollaborationHazards: Equatable, Sendable {
+        /// Unresolved merge conflict markers in content Markdown and/or ids.json.
+        let conflictMarkers: [MarkdownSources.ConflictMarkerFinding]
+        /// Live IDs claimed by more than one eligible heading (often concurrent-assign merges).
+        let duplicateIDs: [String]
+        /// Per-duplicate claim locations (`file:line — content`).
+        let duplicateLocations: [String: [String]]
+
+        var hasConflictMarkers: Bool { !conflictMarkers.isEmpty }
+        var hasDuplicateIDs: Bool { !duplicateIDs.isEmpty }
+        /// True when assign must not write / lint should fail.
+        var hasBlockingProblems: Bool { hasConflictMarkers || hasDuplicateIDs }
+    }
+
+    /// Scan content Markdown + `ids.json` for unresolved merge conflict markers (#39).
+    ///
+    /// Does not call any SCM tool. Markers are the portable `<<<<<<<` / `>>>>>>>` /
+    /// (conditional) `=======` text left by unfinished merges in many systems.
+    static func findConflictMarkers(project: SpecticusProject) throws -> [MarkdownSources.ConflictMarkerFinding] {
+        var findings: [MarkdownSources.ConflictMarkerFinding] = []
+        let mdFiles = try MarkdownSources.discoverContentFiles(in: project.root)
+        for file in mdFiles {
+            findings.append(contentsOf: MarkdownSources.findConflictMarkers(inFile: file))
+        }
+        let idsURL = project.idsURL
+        if FileManager.default.fileExists(atPath: idsURL.path) {
+            // Display as path under .specticus so users know which store file is dirty.
+            let display = "\(SpecticusProject.hiddenDirectoryName)/\(SpecticusProject.idsFileName)"
+            findings.append(contentsOf: MarkdownSources.findConflictMarkers(
+                inFile: idsURL,
+                displayName: display
+            ))
+        }
+        return findings.sorted { lhs, rhs in
+            if lhs.file != rhs.file { return lhs.file < rhs.file }
+            return lhs.lineIndex < rhs.lineIndex
+        }
+    }
+
+    /// Collect collaboration hazards from live headings + on-disk sources (#39).
+    static func collectCollaborationHazards(project: SpecticusProject) throws -> CollaborationHazards {
+        let headings = try collectHeadings(project: project)
+        return try collectCollaborationHazards(project: project, headings: headings)
+    }
+
+    /// Same as `collectCollaborationHazards(project:)` when headings are already loaded.
+    static func collectCollaborationHazards(
+        project: SpecticusProject,
+        headings: [HeadingInfo]
+    ) throws -> CollaborationHazards {
+        let markers = try findConflictMarkers(project: project)
+        var idToInfos: [String: [HeadingInfo]] = [:]
+        for h in headings {
+            if let id = h.id {
+                idToInfos[id, default: []].append(h)
+            }
+        }
+        let duplicates = idToInfos.filter { $0.value.count > 1 }
+        let duplicateIDs = duplicates.keys.sorted()
+        var locations: [String: [String]] = [:]
+        for id in duplicateIDs {
+            locations[id] = (duplicates[id] ?? []).map { h in
+                "\(h.file.lastPathComponent):\(h.lineIndex + 1) — \(h.content)"
+            }
+        }
+        return CollaborationHazards(
+            conflictMarkers: markers,
+            duplicateIDs: duplicateIDs,
+            duplicateLocations: locations
+        )
+    }
+
+    /// Print conflict-marker findings with recovery guidance (#39).
+    static func printConflictMarkerReport(
+        _ findings: [MarkdownSources.ConflictMarkerFinding],
+        style: CollaborationReportStyle = .blocking
+    ) {
+        guard !findings.isEmpty else { return }
+        let header: String
+        switch style {
+        case .blocking:
+            header = "❌ Unresolved merge conflict markers in documentation sources (#39):"
+        case .warning:
+            header = "⚠️  Unresolved merge conflict markers in documentation sources (#39):"
+        case .status:
+            header = "  ❌ Unresolved merge conflict markers (\(findings.count)):"
+        }
+        print(header)
+        for f in findings.prefix(24) {
+            let kindLabel: String
+            switch f.kind {
+            case .start: kindLabel = "start"
+            case .middle: kindLabel = "separator"
+            case .end: kindLabel = "end"
+            }
+            let preview = f.linePreview.count > 60
+                ? String(f.linePreview.prefix(57)) + "…"
+                : f.linePreview
+            print("   \(f.file):\(f.lineIndex + 1) [\(kindLabel)] \(preview)")
+        }
+        if findings.count > 24 {
+            print("   ... and \(findings.count - 24) more")
+        }
+        print("   → Finish merging those files (remove <<<<<<< / ======= / >>>>>>> lines), then re-run.")
+        print("   → specticus is SCM-agnostic: it only inspects file text, not git/fossil/svn state.")
+    }
+
+    /// Print duplicate-ID fallout with concurrent-assign guidance (#39).
+    static func printDuplicateIDReport(
+        hazards: CollaborationHazards,
+        style: CollaborationReportStyle = .blocking
+    ) {
+        guard !hazards.duplicateIDs.isEmpty else { return }
+        let header: String
+        switch style {
+        case .blocking:
+            header = "❌ Duplicate IDs found (must be unique) — common after concurrent `ids assign` merges (#39):"
+        case .warning:
+            header = "⚠️  Duplicate IDs found (must be unique) — common after concurrent `ids assign` merges (#39):"
+        case .status:
+            header = "  ❌ Duplicate claims (concurrent-assign / merge fallout — #39): \(hazards.duplicateIDs.joined(separator: ", "))"
+        }
+        print(header)
+        for id in hazards.duplicateIDs {
+            if style != .status {
+                print("   \(id)")
+            }
+            for loc in hazards.duplicateLocations[id] ?? [] {
+                let prefix = style == .status ? "      " : "     - "
+                print("\(prefix)\(loc)")
+            }
+        }
+        if style == .status {
+            print("      → Edit Markdown so each ID appears once; prefer one assigner per integrate cycle")
+        } else {
+            print("   → Keep one heading per ID; renumber or drop the other claim (never silent reuse — #33).")
+            print("   → Team tip: pull/merge latest docs before `ids assign`; commit Markdown + ids.json together.")
+        }
+    }
+
+    enum CollaborationReportStyle: Equatable, Sendable {
+        case blocking
+        case warning
+        case status
+    }
+
     // MARK: - Assign options & safety (#35 / #38)
 
     /// How `specticus build` may invoke ID assignment (#38).
@@ -325,6 +485,9 @@ enum IdsManager {
 
         let headings = try collectHeadings(project: project)
 
+        // Collaboration preflight (#39): conflict markers + duplicate claims (SCM-agnostic).
+        let collab = try collectCollaborationHazards(project: project, headings: headings)
+
         var idToInfos: [String: [HeadingInfo]] = [:]
         var headingsNeedingID: [HeadingInfo] = []
         var drifts: [DriftFinding] = []
@@ -371,20 +534,15 @@ enum IdsManager {
             }
         }
 
-        // duplicates?
-        let duplicateIDs = idToInfos.filter { $0.value.count > 1 }.keys.sorted()
-
         // Report problems
         var hasProblems = false
-        if !duplicateIDs.isEmpty {
+        if collab.hasConflictMarkers {
             hasProblems = true
-            print("❌ Duplicate IDs found (must be unique):")
-            for id in duplicateIDs {
-                print("   \(id)")
-                for h in idToInfos[id]! {
-                    print("     - \(h.file.lastPathComponent): \(h.content)")
-                }
-            }
+            printConflictMarkerReport(collab.conflictMarkers, style: .blocking)
+        }
+        if collab.hasDuplicateIDs {
+            hasProblems = true
+            printDuplicateIDReport(hazards: collab, style: .blocking)
         }
 
         if !markdownHeadings.isEmpty {
@@ -496,8 +654,8 @@ enum IdsManager {
                     print("     ... and \(newlyAssigned.count - 10) more")
                 }
             }
-            print("Aborting write due to duplicates or drift. Fix issues and re-run `ids assign`.")
-            // Do not mutate bindings on problems (user should resolve drift/dupe first)
+            print("Aborting write due to conflict markers, duplicates, or drift. Fix issues and re-run `ids assign` (#39).")
+            // Do not mutate bindings on problems (user should resolve markers/drift/dupe first)
             return
         }
 
@@ -519,16 +677,17 @@ enum IdsManager {
             try printAssignDiffs(byFile: byFile)
         }
 
+        // Optional convenience only (#35). Collaboration safety is content-based (#39), not SCM-bound.
         if options.checkGit {
             var candidates = filesToRewrite
             candidates.append(storeURL)
             let dirty = GitWorkspace.dirtyPaths(among: candidates, in: project.root)
             if !dirty.isEmpty {
-                print("⚠️  Git: uncommitted changes in path(s) that will be modified:")
+                print("⚠️  Optional VCS hint (git detected): uncommitted changes in path(s) that will be modified:")
                 for name in dirty {
                     print("     • \(name)")
                 }
-                print("   Consider committing or stashing first. Continue only if intentional.")
+                print("   Consider integrating with teammates first. Not required — specticus does not depend on git (#39).")
             }
         }
 
@@ -888,7 +1047,7 @@ enum IdsManager {
         let content: String
     }
 
-    /// Snapshot of store vs Markdown for status / lint (#37).
+    /// Snapshot of store vs Markdown for status / lint (#37 / #39).
     struct LifecycleReport: Equatable, Sendable {
         /// Whether `.specticus/ids.json` exists on disk.
         let storeExists: Bool
@@ -906,6 +1065,8 @@ enum IdsManager {
         let counters: [String: Int]
         /// Total bindings currently recorded.
         let bindingCount: Int
+        /// Unresolved merge conflict markers in content Markdown / ids.json (#39).
+        let conflictMarkers: [MarkdownSources.ConflictMarkerFinding]
     }
 
     /// Result of a successful `ids prune-orphans` run.
@@ -987,6 +1148,7 @@ enum IdsManager {
         let duplicates = idToInfos.filter { $0.value.count > 1 }.keys.sorted()
         let unbound = liveIDs.filter { store.bindings[$0] == nil }.sorted()
         let drifts = findContentDrifts(headings: headings, store: store, sensitivity: sensitivity)
+        let conflictMarkers = try findConflictMarkers(project: project)
 
         return LifecycleReport(
             storeExists: storeExists,
@@ -996,16 +1158,18 @@ enum IdsManager {
             unboundLiveIDs: unbound,
             drifts: drifts,
             counters: store.counters,
-            bindingCount: store.bindings.count
+            bindingCount: store.bindings.count,
+            conflictMarkers: conflictMarkers
         )
     }
 
-    /// Print a human-readable lifecycle status report (#37). Does not mutate files.
+    /// Print a human-readable lifecycle status report (#37 / #39). Does not mutate files.
     static func printStatus(project: SpecticusProject) throws {
         let report = try lifecycleReport(project: project)
         let sensitivity = project.config.ids.driftSensitivity
+        let collab = try collectCollaborationHazards(project: project)
 
-        print("📋 Traceability ID lifecycle status (#37)\n")
+        print("📋 Traceability ID lifecycle status (#37 / #39)\n")
 
         if report.storeExists {
             print("  Store: .specticus/ids.json present (\(report.bindingCount) binding(s))")
@@ -1021,9 +1185,14 @@ enum IdsManager {
             print("      \(preview)\(more)")
         }
 
-        if !report.duplicateIDs.isEmpty {
-            print("  ❌ Duplicate claims: \(report.duplicateIDs.joined(separator: ", "))")
-            print("      → Resolve by editing Markdown so each ID appears once")
+        if collab.hasConflictMarkers {
+            printConflictMarkerReport(collab.conflictMarkers, style: .status)
+        } else {
+            print("  ✅ No unresolved merge conflict markers in sources")
+        }
+
+        if collab.hasDuplicateIDs {
+            printDuplicateIDReport(hazards: collab, style: .status)
         }
 
         if !report.unboundLiveIDs.isEmpty {
@@ -1073,7 +1242,14 @@ enum IdsManager {
             • Live ID not in store      → ids assign
             • Content drift             → ids accept-drift <ID>
             • Orphan (deleted heading)  → leave, or ids prune-orphans
+            • Conflict markers          → finish merge in the file text, then lint/assign (#39)
+            • Duplicate IDs             → edit Markdown so each ID is unique (#39)
             • Manual ids.json edit      → ok for advanced users; prefer CLI for audit trail
+
+          Team workflow (SCM-agnostic — #39):
+            • Integrate latest docs before `ids assign`; commit Markdown + ids.json together
+            • Prefer one assign pass per integrate cycle to avoid duplicate ID minting
+            • specticus never talks to git/fossil/svn — resolve conflicts in the files themselves
         """)
     }
 

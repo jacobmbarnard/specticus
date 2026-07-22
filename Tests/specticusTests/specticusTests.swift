@@ -2685,3 +2685,211 @@ private func makeLifecycleFixture(
     #expect(partial.ids.autoAssign == false)
     #expect(SpecticusConfig.default.ids.autoAssign == false)
 }
+
+// MARK: - Collaboration hazards (#39, SCM-agnostic)
+
+@Test func conflictMarkerDetectionFindsStartAndEnd() {
+    let text = """
+    # Title
+    <<<<<<< HEAD
+    ## BR1: Left side
+    =======
+    ## BR1: Right side
+    >>>>>>> feature
+    """
+    let findings = MarkdownSources.findConflictMarkers(in: text, fileDisplayName: "doc.md")
+    #expect(findings.contains { $0.kind == .start && $0.lineIndex == 1 })
+    #expect(findings.contains { $0.kind == .end })
+    #expect(findings.contains { $0.kind == .middle })
+    #expect(MarkdownSources.isConflictStartMarker("<<<<<<< HEAD"))
+    #expect(MarkdownSources.isConflictEndMarker(">>>>>>> theirs"))
+    #expect(MarkdownSources.isConflictMiddleMarker("======="))
+    #expect(!MarkdownSources.isConflictMiddleMarker("===")) // too short / setext-ish
+}
+
+@Test func conflictMarkerMiddleAloneIsNotFlagged() {
+    // Bare ======= without <<<<<<< / >>>>>>> must not false-positive (setext risk).
+    let text = """
+    Heading-like
+    =======
+    body
+    """
+    let findings = MarkdownSources.findConflictMarkers(in: text, fileDisplayName: "doc.md")
+    #expect(findings.isEmpty)
+}
+
+@Test func assignBlocksOnConflictMarkersWithoutWriting() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-collab-markers-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-business-requirements.md")
+    try """
+    # Overview
+    <<<<<<< HEAD
+    ## User Login requirement
+    =======
+    ## User Logout requirement
+    >>>>>>> feature
+    """.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let mdBefore = try String(contentsOf: mdURL, encoding: .utf8)
+
+    let markers = try IdsManager.findConflictMarkers(project: project)
+    #expect(!markers.isEmpty)
+
+    // Dry-run and real assign must not write when markers present.
+    try IdsManager.assignIDs(project: project, options: .dryRunOnly())
+    try IdsManager.assignIDs(
+        project: project,
+        options: IdsManager.AssignOptions(dryRun: false, assumeYes: true, checkGit: false)
+    )
+
+    let mdAfter = try String(contentsOf: mdURL, encoding: .utf8)
+    #expect(mdAfter == mdBefore)
+    #expect(!fm.fileExists(atPath: project.idsURL.path))
+}
+
+@Test func assignBlocksOnConflictMarkersInIdsJSON() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-collab-ids-json-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-business-requirements.md")
+    try """
+    # Overview
+    ## BR1: User Login
+    """.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+    // Conflicted ids.json — raw markers (invalid JSON; loadStore will fall back empty).
+    try """
+    {
+    <<<<<<< HEAD
+      "version": 1,
+      "bindings": { "BR1": "User Login" },
+      "counters": { "BR": 1 }
+    =======
+      "version": 1,
+      "bindings": { "BR1": "User Logout" },
+      "counters": { "BR": 2 }
+    >>>>>>> feature
+    }
+    """.write(to: specticusDir.appendingPathComponent("ids.json"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let hazards = try IdsManager.collectCollaborationHazards(project: project)
+    #expect(hazards.hasConflictMarkers)
+    #expect(hazards.conflictMarkers.contains { $0.file.contains("ids.json") })
+
+    let mdBefore = try String(contentsOf: mdURL, encoding: .utf8)
+    try IdsManager.assignIDs(
+        project: project,
+        options: IdsManager.AssignOptions(dryRun: false, assumeYes: true, checkGit: false)
+    )
+    // Must not rewrite Markdown while store file still has markers.
+    let mdAfter = try String(contentsOf: mdURL, encoding: .utf8)
+    #expect(mdAfter == mdBefore)
+}
+
+@Test func collaborationHazardsDetectDuplicateIDsFromConcurrentAssignFallout() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-collab-dupes-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    // Classic merge fallout: two developers each assigned BR5 to different headings.
+    try """
+    # Requirements A
+    ## BR5: Alpha Login
+    """.write(to: tmp.appendingPathComponent("007-business-requirements.md"), atomically: true, encoding: .utf8)
+    try """
+    # Requirements B
+    ## BR5: Beta Logout
+    """.write(to: tmp.appendingPathComponent("008-more-requirements.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let hazards = try IdsManager.collectCollaborationHazards(project: project)
+    #expect(hazards.hasDuplicateIDs)
+    #expect(hazards.duplicateIDs == ["BR5"])
+    #expect((hazards.duplicateLocations["BR5"] ?? []).count == 2)
+    #expect(hazards.hasBlockingProblems)
+    #expect(!hazards.hasConflictMarkers)
+
+    let mdABefore = try String(contentsOf: tmp.appendingPathComponent("007-business-requirements.md"), encoding: .utf8)
+    try IdsManager.assignIDs(
+        project: project,
+        options: IdsManager.AssignOptions(dryRun: false, assumeYes: true, checkGit: false)
+    )
+    let mdAAfter = try String(contentsOf: tmp.appendingPathComponent("007-business-requirements.md"), encoding: .utf8)
+    #expect(mdAAfter == mdABefore)
+}
+
+@Test func lifecycleReportIncludesConflictMarkers() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-collab-lifecycle-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    try """
+    # Overview
+    <<<<<<< ours
+    ## BR1: One
+    >>>>>>> theirs
+    """.write(to: tmp.appendingPathComponent("007-business-requirements.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let report = try IdsManager.lifecycleReport(project: project)
+    #expect(!report.conflictMarkers.isEmpty)
+}
+
+@Test func cleanProjectHasNoCollaborationHazards() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-collab-clean-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    try """
+    # Overview
+    ## BR1: User Login
+    """.write(to: tmp.appendingPathComponent("007-business-requirements.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+    try """
+    {
+      "version": 1,
+      "bindings": { "BR1": "User Login" },
+      "counters": { "BR": 1 }
+    }
+    """.write(to: specticusDir.appendingPathComponent("ids.json"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let hazards = try IdsManager.collectCollaborationHazards(project: project)
+    #expect(!hazards.hasBlockingProblems)
+    #expect(hazards.conflictMarkers.isEmpty)
+    #expect(hazards.duplicateIDs.isEmpty)
+}

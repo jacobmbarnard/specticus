@@ -179,6 +179,27 @@ struct Lint: ParsableCommand {
             var idToHeadings: [String: [IdsManager.HeadingInfo]] = [:]
             let store = IdsManager.loadStore(from: project.idsURL)
             let sensitivity = project.config.ids.driftSensitivity
+            let collab = try IdsManager.collectCollaborationHazards(
+                project: project,
+                headings: headings
+            )
+
+            // Collaboration hazards (#39): unresolved merge markers + duplicate IDs.
+            // Content-based only — specticus does not query any SCM.
+            if collab.hasConflictMarkers {
+                fail(
+                    "\(collab.conflictMarkers.count) unresolved merge conflict marker(s) in documentation sources (#39)",
+                    suggestion: "Finish merging those files (remove <<<<<<< / ======= / >>>>>>> lines). specticus is SCM-agnostic and only inspects file text."
+                )
+                for f in collab.conflictMarkers.prefix(8) {
+                    print("      e.g. \(f.file):\(f.lineIndex + 1): \(f.linePreview)")
+                }
+                if collab.conflictMarkers.count > 8 {
+                    print("      … and \(collab.conflictMarkers.count - 8) more")
+                }
+            } else {
+                ok("No unresolved merge conflict markers in sources (#39)")
+            }
 
             for h in headings {
                 if let id = h.id {
@@ -188,8 +209,15 @@ struct Lint: ParsableCommand {
 
             let dups = idToHeadings.filter { $0.value.count > 1 }
             if !dups.isEmpty {
-                fail("Duplicate traceability IDs found: \(dups.keys.sorted().joined(separator: ", "))",
-                     suggestion: "Run `specticus ids assign` to diagnose and resolve.")
+                fail(
+                    "Duplicate traceability IDs found: \(dups.keys.sorted().joined(separator: ", "))",
+                    suggestion: "Often concurrent `ids assign` + merge fallout (#39). Edit Markdown so each ID appears once; integrate latest docs before the next assign; commit Markdown + ids.json together."
+                )
+                for id in dups.keys.sorted() {
+                    for h in dups[id] ?? [] {
+                        print("      \(id) @ \(h.file.lastPathComponent):\(h.lineIndex + 1) — \(h.content)")
+                    }
+                }
             } else {
                 ok("No duplicate traceability IDs")
             }
@@ -254,7 +282,7 @@ struct Lint: ParsableCommand {
         print("\n  ℹ️  External tools:")
         print("      • Mermaid diagrams: rendered client-side in the output HTML (no CLI tool required).")
         print("      • For advanced Mermaid CLI rendering you can optionally install @mermaid-js/mermaid-cli.")
-        print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, asset copy, diagrams, build tracking (#8), and ID traceability settings (#6; #32 heading levels; #33 counters; #36 drift_sensitivity; #37 ids.json lifecycle; #38 auto_assign is report-only on build — mutation needs --assign-ids). Lint enforces ID uniqueness, drift, plain-text headings, and reports orphans.")
+        print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, asset copy, diagrams, build tracking (#8), and ID traceability settings (#6; #32 heading levels; #33 counters; #36 drift_sensitivity; #37 ids.json lifecycle; #38 auto_assign is report-only on build — mutation needs --assign-ids; #39 collaboration: conflict markers + duplicate IDs, SCM-agnostic). Lint enforces ID uniqueness, conflict markers, drift, plain-text headings, and reports orphans.")
         if project.hasSpecticusDirectory {
             if FileManager.default.fileExists(atPath: project.buildNumberURL.path) {
                 if let record = try? BuildTracker.load(from: project.buildNumberURL) {
