@@ -22,10 +22,9 @@ struct IdsAssign: ParsableCommand {
             - Build does not mutate sources when ids.auto_assign is true alone (#38);
               use `specticus build --assign-ids` only when you intentionally want that.
 
-            Collaboration hazards (#39) — SCM-agnostic:
-            - Unresolved merge conflict markers (<<<<<<< / >>>>>>>) in Markdown or ids.json
-              block writes. specticus inspects file text only; it never calls git/fossil/svn.
-            - Duplicate live IDs (classic concurrent-assign merge fallout) also block writes.
+            Collaboration hazards (#39) — ID hygiene (SCM-agnostic by design):
+            - Duplicate live IDs (classic concurrent `ids assign` fallout) block writes.
+            - specticus does not model SCM merge markers or call git/fossil/svn for safety.
             - Optional git dirty-path hints remain convenience-only (--skip-git-check to silence).
             - Team tip: integrate latest docs before assign; commit Markdown + ids.json together.
             """
@@ -40,7 +39,7 @@ struct IdsAssign: ParsableCommand {
     @Flag(name: .long, help: "Show line-level before/after for planned Markdown rewrites")
     var diff: Bool = false
 
-    @Flag(name: .long, help: "Skip optional git dirty-tree hint for files about to change (collaboration checks are content-based, #39)")
+    @Flag(name: .long, help: "Skip optional git dirty-tree hint for files about to change (ID uniqueness checks are independent, #39)")
     var skipGitCheck: Bool = false
 
     func run() throws {

@@ -132,8 +132,7 @@ struct Build: ParsableCommand {
         }
 
         // Traceability checks (#6 / #36 / #39): warn on drift, Markdown-in-headings,
-        // unresolved conflict markers, and duplicate IDs. Build still succeeds;
-        // assign/lint treat these as stronger problems.
+        // and duplicate IDs. Build still succeeds; assign/lint treat these as stronger problems.
         do {
             let headings = try IdsManager.collectHeadings(project: project)
             let store = IdsManager.loadStore(from: project.idsURL)
@@ -144,15 +143,11 @@ struct Build: ParsableCommand {
                 sensitivity: sensitivity
             )
             let mdFindings = IdsManager.findMarkdownFormattedHeadings(in: headings)
-            let collab = try IdsManager.collectCollaborationHazards(
+            let collab = IdsManager.collectCollaborationHazards(
                 project: project,
                 headings: headings
             )
 
-            if collab.hasConflictMarkers {
-                IdsManager.printConflictMarkerReport(collab.conflictMarkers, style: .warning)
-                print("   → HTML was still generated; fix markers before trusting traceability or running ids assign.")
-            }
             if collab.hasDuplicateIDs {
                 IdsManager.printDuplicateIDReport(hazards: collab, style: .warning)
                 print("   → HTML was still generated; resolve duplicates so IDs stay unique across the team.")

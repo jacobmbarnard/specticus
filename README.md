@@ -102,34 +102,33 @@ All IDs and numbering are designed to remain stable across edits and merges.
 
 ### Team workflow for traceability IDs (#39)
 
-specticus is **SCM-agnostic**: it never calls Git, Fossil, SVN, or any other version-control tool for collaboration safety. Instead it inspects **documentation content** and advises when IDs are in a bad state.
+specticus is **SCM-agnostic by design**: it never calls Git, Fossil, SVN, or any other version-control tool, and it does not model SCM-specific artifacts. Collaboration safety is **ID hygiene** — unique live IDs and a coherent `ids.json` store.
 
 **Hazards teams hit:**
 
 | Situation | What goes wrong | What specticus does |
 |-----------|-----------------|---------------------|
 | Two people run `ids assign` on divergent checkouts | Both mint the same next ID (e.g. two `BR5`s) | Duplicate IDs fail `lint` / block `ids assign`; `build` warns |
-| Unfinished merge left markers in `.md` or `ids.json` | Conflict text pollutes docs and the ID store | Markers fail `lint` / block `ids assign`; `build` and `ids status` report them |
-| `ids.json` and Markdown diverge after a messy merge | Drift, orphans, or unbound live IDs | `ids status`, `lint`, and `build` surface lifecycle problems |
+| `ids.json` and Markdown diverge after a messy integrate | Drift, orphans, or unbound live IDs | `ids status`, `lint`, and `build` surface lifecycle problems |
 
 **Recommended practices:**
 
-1. **Integrate first** — pull/merge the latest documentation before running `ids assign`.
-2. **One assign pass per integrate cycle** — prefer a single person (or CI job) to mint new IDs after teammates have merged plain-language headings.
-3. **Commit Markdown and `ids.json` together** — treat them as one unit so merges stay coherent.
+1. **Integrate first** — bring in the latest documentation before running `ids assign`.
+2. **One assign pass per integrate cycle** — prefer a single person (or CI job) to mint new IDs after teammates have landed plain-language headings.
+3. **Commit Markdown and `ids.json` together** — treat them as one unit so the store stays coherent with sources.
 4. **Preview before rewrite** — `specticus ids assign --dry-run` (add `--diff`), then `--yes` when ready.
 5. **Never enable source mutation in shared CI by default** — `ids.auto_assign` is report-only on build; `--assign-ids` is opt-in (#38).
-6. **Finish merges in the files** — remove `<<<<<<<` / `=======` / `>>>>>>>` markers, then re-run `specticus lint`.
+6. **Keep each live ID unique** — if concurrent assigns produce duplicates, edit Markdown so each ID appears once, then re-run `specticus lint`.
 
 ```bash
 # After integrating teammates' doc changes:
-specticus lint                 # fails on conflict markers + duplicate IDs
+specticus lint                 # fails on duplicate IDs
 specticus ids status           # lifecycle + collaboration snapshot
 specticus ids assign --dry-run
 specticus ids assign --yes     # only when clean
 ```
 
-Optional: if git is present, `ids assign` may print a soft dirty-path hint for files it is about to rewrite. That hint is convenience-only and can be skipped with `--skip-git-check`. Collaboration guarantees come from content checks, not from any SCM.
+Optional: if git is present, `ids assign` may print a soft dirty-path hint for files it is about to rewrite. That hint is convenience-only and can be skipped with `--skip-git-check`. Collaboration guarantees come from ID uniqueness and store coherence, not from any SCM.
 
 ## Contributing
 

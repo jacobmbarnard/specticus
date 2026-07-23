@@ -16,8 +16,8 @@ struct Ids: ParsableCommand {
             `ids assign` rewrites Markdown in place — preview with `--dry-run` / `--diff`, \
             confirm with `--yes` when non-interactive (#35). Build-time ids.auto_assign is \
             report-only; mutation requires `specticus build --assign-ids` (#38). Collaboration \
-            (#39): unresolved conflict markers and duplicate IDs are detected from file content \
-            only — specticus never latches onto git/fossil/svn.
+            (#39): duplicate live IDs block assign/lint (ID hygiene only — specticus never \
+            latches onto git/fossil/svn or SCM merge markers).
             """,
         subcommands: [
             IdsAssign.self,

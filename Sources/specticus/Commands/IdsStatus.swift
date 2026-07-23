@@ -18,8 +18,8 @@ struct IdsStatus: ParsableCommand {
             Orphans are not errors: deleted headings keep their numbers reserved (#33). \
             After review, remove bindings with `ids prune-orphans` (counters never decrease).
 
-            Also reports collaboration hazards (#39): unresolved merge conflict markers and \
-            duplicate ID claims. Detection is SCM-agnostic (file text only).
+            Also reports collaboration hazards (#39): duplicate live ID claims from concurrent \
+            `ids assign`. Detection is ID-hygiene only (SCM-agnostic by design).
 
             See GitHub issues #37 and #39.
             """
