@@ -2685,3 +2685,71 @@ private func makeLifecycleFixture(
     #expect(partial.ids.autoAssign == false)
     #expect(SpecticusConfig.default.ids.autoAssign == false)
 }
+
+// MARK: - Collaboration hazards (#39, ID hygiene / SCM-agnostic)
+
+@Test func collaborationHazardsDetectDuplicateIDsFromConcurrentAssignFallout() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-collab-dupes-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    // Classic concurrent-assign fallout: two developers each assigned BR5 to different headings.
+    try """
+    # Requirements A
+    ## BR5: Alpha Login
+    """.write(to: tmp.appendingPathComponent("007-business-requirements.md"), atomically: true, encoding: .utf8)
+    try """
+    # Requirements B
+    ## BR5: Beta Logout
+    """.write(to: tmp.appendingPathComponent("008-more-requirements.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let hazards = try IdsManager.collectCollaborationHazards(project: project)
+    #expect(hazards.hasDuplicateIDs)
+    #expect(hazards.duplicateIDs == ["BR5"])
+    #expect((hazards.duplicateLocations["BR5"] ?? []).count == 2)
+    #expect(hazards.hasBlockingProblems)
+
+    let mdABefore = try String(contentsOf: tmp.appendingPathComponent("007-business-requirements.md"), encoding: .utf8)
+    try IdsManager.assignIDs(
+        project: project,
+        options: IdsManager.AssignOptions(dryRun: false, assumeYes: true, checkGit: false)
+    )
+    let mdAAfter = try String(contentsOf: tmp.appendingPathComponent("007-business-requirements.md"), encoding: .utf8)
+    #expect(mdAAfter == mdABefore)
+}
+
+@Test func cleanProjectHasNoCollaborationHazards() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-collab-clean-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    try """
+    # Overview
+    ## BR1: User Login
+    """.write(to: tmp.appendingPathComponent("007-business-requirements.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+    try """
+    {
+      "version": 1,
+      "bindings": { "BR1": "User Login" },
+      "counters": { "BR": 1 }
+    }
+    """.write(to: specticusDir.appendingPathComponent("ids.json"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let hazards = try IdsManager.collectCollaborationHazards(project: project)
+    #expect(!hazards.hasBlockingProblems)
+    #expect(hazards.duplicateIDs.isEmpty)
+}

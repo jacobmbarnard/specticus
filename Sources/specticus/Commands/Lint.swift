@@ -180,6 +180,7 @@ struct Lint: ParsableCommand {
             let store = IdsManager.loadStore(from: project.idsURL)
             let sensitivity = project.config.ids.driftSensitivity
 
+            // Collaboration hazards (#39): duplicate live IDs (ID hygiene only — no SCM artifacts).
             for h in headings {
                 if let id = h.id {
                     idToHeadings[id, default: []].append(h)
@@ -188,8 +189,15 @@ struct Lint: ParsableCommand {
 
             let dups = idToHeadings.filter { $0.value.count > 1 }
             if !dups.isEmpty {
-                fail("Duplicate traceability IDs found: \(dups.keys.sorted().joined(separator: ", "))",
-                     suggestion: "Run `specticus ids assign` to diagnose and resolve.")
+                fail(
+                    "Duplicate traceability IDs found: \(dups.keys.sorted().joined(separator: ", "))",
+                    suggestion: "Often concurrent `ids assign` (#39). Edit Markdown so each ID appears once; integrate latest docs before the next assign; commit Markdown + ids.json together."
+                )
+                for id in dups.keys.sorted() {
+                    for h in dups[id] ?? [] {
+                        print("      \(id) @ \(h.file.lastPathComponent):\(h.lineIndex + 1) — \(h.content)")
+                    }
+                }
             } else {
                 ok("No duplicate traceability IDs")
             }
@@ -254,7 +262,7 @@ struct Lint: ParsableCommand {
         print("\n  ℹ️  External tools:")
         print("      • Mermaid diagrams: rendered client-side in the output HTML (no CLI tool required).")
         print("      • For advanced Mermaid CLI rendering you can optionally install @mermaid-js/mermaid-cli.")
-        print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, asset copy, diagrams, build tracking (#8), and ID traceability settings (#6; #32 heading levels; #33 counters; #36 drift_sensitivity; #37 ids.json lifecycle; #38 auto_assign is report-only on build — mutation needs --assign-ids). Lint enforces ID uniqueness, drift, plain-text headings, and reports orphans.")
+        print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, asset copy, diagrams, build tracking (#8), and ID traceability settings (#6; #32 heading levels; #33 counters; #36 drift_sensitivity; #37 ids.json lifecycle; #38 auto_assign is report-only on build — mutation needs --assign-ids; #39 collaboration: duplicate live IDs / ID hygiene, SCM-agnostic). Lint enforces ID uniqueness, drift, plain-text headings, and reports orphans.")
         if project.hasSpecticusDirectory {
             if FileManager.default.fileExists(atPath: project.buildNumberURL.path) {
                 if let record = try? BuildTracker.load(from: project.buildNumberURL) {

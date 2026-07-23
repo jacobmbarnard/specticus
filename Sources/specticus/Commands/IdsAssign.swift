@@ -18,10 +18,15 @@ struct IdsAssign: ParsableCommand {
             - Prefer `specticus ids assign --dry-run` (add `--diff` for line-level patches) first.
             - Interactive sessions prompt before rewriting unless `--yes` is passed.
             - Non-interactive sessions require `--yes` to rewrite source files.
-            - Git dirty paths that will be modified are reported as warnings.
             - Missing ids.json is recovered by bootstrapping from live Markdown IDs.
             - Build does not mutate sources when ids.auto_assign is true alone (#38);
               use `specticus build --assign-ids` only when you intentionally want that.
+
+            Collaboration hazards (#39) — ID hygiene (SCM-agnostic by design):
+            - Duplicate live IDs (classic concurrent `ids assign` fallout) block writes.
+            - specticus does not model SCM merge markers or call git/fossil/svn for safety.
+            - Optional git dirty-path hints remain convenience-only (--skip-git-check to silence).
+            - Team tip: integrate latest docs before assign; commit Markdown + ids.json together.
             """
     )
 
@@ -34,7 +39,7 @@ struct IdsAssign: ParsableCommand {
     @Flag(name: .long, help: "Show line-level before/after for planned Markdown rewrites")
     var diff: Bool = false
 
-    @Flag(name: .long, help: "Skip git dirty-tree warning for files about to change")
+    @Flag(name: .long, help: "Skip optional git dirty-tree hint for files about to change (ID uniqueness checks are independent, #39)")
     var skipGitCheck: Bool = false
 
     func run() throws {
