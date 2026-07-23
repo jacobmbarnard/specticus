@@ -17,6 +17,9 @@ specticus build --input welcome-template.md
 # specticus ids assign --yes
 # ids.auto_assign in .specticus/config.yml only reports during build;
 # mutation requires: specticus build --assign-ids  (avoid in CI unless intentional)
+#
+# Full workflow + pitfalls:
+# https://github.com/jacobmbarnard/specticus/blob/develop/docs/traceability-ids.md
 ```
 
 ## Contents

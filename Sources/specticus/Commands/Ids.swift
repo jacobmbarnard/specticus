@@ -6,7 +6,8 @@ struct Ids: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Manage stable traceability IDs (BR1, TS2, ADR3, etc.).",
         discussion: """
-            See GitHub issues #6, #32–#39, #66. IDs use simple form (BR1, BR2, TS1, … no dash \
+            Recommended workflow and common pitfalls: docs/traceability-ids.md (#41). \
+            See also GitHub issues #6, #32–#39, #66. IDs use simple form (BR1, BR2, TS1, … no dash \
             or padding). Must be unique. Default: H1–H2 may own IDs (#32). Counters: per-prefix \
             max+1, no reuse (#33). Drift sensitivity: ids.drift_sensitivity (strict / contentStrict \
             / contentStrictPlus; #36). Plain-text headings only (no Markdown in titles). \
@@ -35,7 +36,8 @@ struct Ids: ParsableCommand {
               specticus ids accept-drift <ID>
               specticus ids status
               specticus ids prune-orphans
-            (see issues #6, #35, #37, #66).
+            Workflow guide: docs/traceability-ids.md (#41).
+            (also issues #6, #35, #37, #66).
             """)
     }
 }
