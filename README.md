@@ -18,6 +18,8 @@ Writing specifications in Markdown keeps them close to the code and under versio
 - **Powerful CLI** — `init`, `build`, `lint`, `clean`, and `ids` subcommands
 - **Fast** — Written in Swift with minimal dependencies
 
+**Using IDs for the first time?** Read **[Traceability IDs: recommended workflow and common pitfalls](docs/traceability-ids.md)** — syntax, when to assign vs lint vs build, drift, orphans, team patterns, and recovery recipes (#41).
+
 ## Installation
 
 ### From source (current)
@@ -99,6 +101,21 @@ specticus reads a directory of Markdown files (plus optional configuration) and 
 - Consistent styling
 
 All IDs and numbering are designed to remain stable across edits and merges.
+
+### Traceability ID workflow (#41)
+
+Day-to-day ID usage is documented in full here:
+
+**[docs/traceability-ids.md](docs/traceability-ids.md)**
+
+That guide covers:
+
+- Recommended heading syntax (`## BR1: …`)
+- When to run `ids assign` vs `lint` vs `build`
+- Content drift and `ids accept-drift`
+- Orphans, counters, and `ids prune-orphans`
+- Config (`auto_assign`, `heading_max_level`, `drift_sensitivity`)
+- Common mistakes (copy-paste duplicates, wrong ID forms, CI mutation, …)
 
 ### Team workflow for traceability IDs (#39)
 
