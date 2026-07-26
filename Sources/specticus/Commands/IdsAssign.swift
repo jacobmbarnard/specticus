@@ -27,6 +27,10 @@ struct IdsAssign: ParsableCommand {
             - specticus does not model SCM merge markers or call git/fossil/svn for safety.
             - Optional git dirty-path hints remain convenience-only (--skip-git-check to silence).
             - Team tip: integrate latest docs before assign; commit Markdown + ids.json together.
+
+            Skip feedback (#43):
+            - Always prints a heading scan summary: considered counts, skips with reasons, syntax tips.
+            - Pass --verbose to list every eligible heading considered for ownership.
             """
     )
 
@@ -42,6 +46,9 @@ struct IdsAssign: ParsableCommand {
     @Flag(name: .long, help: "Skip optional git dirty-tree hint for files about to change (ID uniqueness checks are independent, #39)")
     var skipGitCheck: Bool = false
 
+    @Flag(name: .long, help: "List every eligible heading considered for ID ownership (#43)")
+    var verbose: Bool = false
+
     func run() throws {
         let project = try SpecticusProject.load()
         for warning in project.warnings {
@@ -51,7 +58,8 @@ struct IdsAssign: ParsableCommand {
             dryRun: dryRun,
             assumeYes: yes || dryRun,
             showDiff: diff,
-            checkGit: !skipGitCheck && !dryRun
+            checkGit: !skipGitCheck && !dryRun,
+            verbose: verbose
         )
         // Dry-run never writes; always safe without --yes.
         if dryRun {

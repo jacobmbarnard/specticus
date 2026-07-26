@@ -58,6 +58,94 @@ enum IdsManager {
         let content: String        // descriptive text after ID or full title
     }
 
+    // MARK: - Heading scan feedback (#43)
+
+    /// Why an ATX heading was not treated as an eligible ID owner, or why assign skipped it.
+    enum HeadingSkipReason: Equatable, Sendable {
+        /// Heading level is outside 1…`ids.heading_max_level`.
+        case deeperThanMaxLevel(level: Int, maxLevel: Int)
+        case insideCodeFence
+        case insideBlockquote
+        case insideHTMLComment
+        case insideTable
+        /// Eligible level, no owning ID, and no BR/TS/… prefix could be inferred.
+        case noPrefixInferred
+        /// Title looks like an ID attempt but does not match owning-ID syntax (#31).
+        case unrecognizedIDForm(detail: String)
+
+        var shortLabel: String {
+            switch self {
+            case .deeperThanMaxLevel(let level, let max):
+                return "heading level H\(level) is deeper than ids.heading_max_level (\(max))"
+            case .insideCodeFence:
+                return "inside a fenced code block"
+            case .insideBlockquote:
+                return "inside a blockquote"
+            case .insideHTMLComment:
+                return "inside an HTML comment"
+            case .insideTable:
+                return "inside a table row"
+            case .noPrefixInferred:
+                return "no ID prefix could be inferred (title, filename, or sibling IDs)"
+            case .unrecognizedIDForm(let detail):
+                return detail
+            }
+        }
+
+        var syntaxTip: String {
+            switch self {
+            case .deeperThanMaxLevel(let level, let maxAllowed):
+                let suggested = Swift.min(6, Swift.max(level, maxAllowed))
+                return "Promote to H1–H\(maxAllowed) (e.g. `## BR1: Title`), or set ids.heading_max_level: \(suggested) in .specticus/config.yml."
+            case .insideCodeFence:
+                return "Move real requirements out of ``` / ~~~ fences into normal headings."
+            case .insideBlockquote:
+                return "Blockquoted headings are examples only (#30). Use a normal ATX heading for ownership."
+            case .insideHTMLComment:
+                return "Headings inside <!-- comments --> are ignored. Uncomment or copy into body content."
+            case .insideTable:
+                return "Table cells are not ID owners. Use a normal `## BR1: …` heading above/beside the table."
+            case .noPrefixInferred:
+                return "Write a manual ID (`## BR1: Title`), use a keyword (requirement, specification, use case, …), or put the heading in a section file (e.g. 007-business-requirements.md)."
+            case .unrecognizedIDForm:
+                return "Owning form is `## BR1: Title` — PREFIX + digits (no dash, no zero-padding), then `:` / `.` / space. Known prefixes: \(knownPrefixes.joined(separator: ", "))."
+            }
+        }
+    }
+
+    /// One ATX heading observed while scanning sources (#43).
+    struct HeadingObservation: Sendable {
+        let file: URL
+        let lineIndex: Int
+        let level: Int
+        let originalLine: String
+        let title: String
+        /// Non-nil when the heading is in an exclusion zone or wrong level for ownership.
+        let exclusion: HeadingSkipReason?
+        /// Eligible heading when exclusion is nil (same as collectHeadings results).
+        let info: HeadingInfo?
+
+        var isEligible: Bool { exclusion == nil && info != nil }
+
+        var location: String {
+            "\(file.lastPathComponent):\(lineIndex + 1)"
+        }
+    }
+
+    /// Full scan used for assign feedback; eligible subset matches `collectHeadings` (#43).
+    struct HeadingScan: Sendable {
+        let maxLevel: Int
+        let observations: [HeadingObservation]
+
+        var eligible: [HeadingInfo] {
+            observations.compactMap(\.info)
+        }
+
+        var excluded: [HeadingObservation] {
+            observations.filter { $0.exclusion != nil }
+        }
+    }
+
     // MARK: - Public API
 
     static func loadStore(from url: URL) -> IdStore {
@@ -97,14 +185,25 @@ enum IdsManager {
     ///
     /// Per issue #32, only ATX levels **1…`ids.heading_max_level`** may own IDs
     /// (default H1+H2; configurable through H6). Deeper headings are skipped entirely.
+    ///
+    /// For full skip/eligibility diagnostics (including excluded headings), use `scanHeadings` (#43).
     static func collectHeadings(project: SpecticusProject) throws -> [HeadingInfo] {
+        try scanHeadings(project: project).eligible
+    }
+
+    /// Full ATX heading scan for assign feedback (#43).
+    ///
+    /// Records ATX headings in content files, including those in exclusion zones and
+    /// deeper than `ids.heading_max_level`, with a reason when they cannot own an ID.
+    /// Eligible observations (`.info != nil`) match historical `collectHeadings` behavior.
+    static func scanHeadings(project: SpecticusProject) throws -> HeadingScan {
         let maxLevel = SpecticusConfig.IdsSection.clampHeadingMaxLevel(
             project.config.ids.headingMaxLevel
         )
-        // Shared discovery with assemble (#35) — same filters + lex order.
+        let minLevel = SpecticusConfig.IdsSection.minHeadingLevel
         let mdFiles = try MarkdownSources.discoverContentFiles(in: project.root)
 
-        var results: [HeadingInfo] = []
+        var observations: [HeadingObservation] = []
 
         for file in mdFiles {
             let raw = try String(contentsOf: file, encoding: .utf8)
@@ -116,17 +215,13 @@ enum IdsManager {
             for (idx, line) in lines.enumerated() {
                 let trimmed = line.trimmingCharacters(in: .whitespaces)
 
-                // Track fenced code blocks (``` or ~~~) — shared delimiter helper (#35)
                 if MarkdownSources.isFenceDelimiter(trimmed) {
                     inFence.toggle()
                     continue
                 }
-                if inFence { continue }
 
-                // Track HTML comments (multi-line aware)
                 if trimmed.hasPrefix("<!--") {
                     inComment = true
-                    // Check for immediate close on same line
                     if trimmed.contains("-->") {
                         inComment = false
                     }
@@ -136,51 +231,79 @@ enum IdsManager {
                     if trimmed.contains("-->") {
                         inComment = false
                     }
+                    // Headings inside HTML comments are not parsed as body content.
                     continue
                 }
 
-                // Skip blockquotes (lines starting with > after optional ws)
-                if trimmed.hasPrefix(">") { continue }
+                // Classify exclusion context, then try to recover an ATX heading line to observe.
+                var exclusion: HeadingSkipReason? = nil
+                var headingSource = line
 
-                // Skip table rows (conservative: anything starting with | after ws)
-                if trimmed.hasPrefix("|") { continue }
-
-                guard let (level, title) = MarkdownSources.parseATXHeading(line) else { continue }
-                // Issue #32: eligible levels are 1…heading_max_level (default 2 = H1+H2).
-                guard level >= SpecticusConfig.IdsSection.minHeadingLevel,
-                      level <= maxLevel else { continue }
-
-                // Issue #34: strip hierarchical outline numbering (#4) before ID detection.
-                // Sources may mix numbered (`## 1.2. BR1: …`) and unnumbered (`## BR1: …`)
-                // headings; outline prefixes are presentation-only and must not affect IDs.
-                // Completely disjoint from heading numbering — we only strip, never invent numbers.
-                let cleaned = HeadingNumberer.stripOutlinePrefix(from: title)
-
-                if let (id, content) = parseID(from: cleaned) {
-                    results.append(HeadingInfo(
-                        file: file,
-                        lineIndex: idx,
-                        originalLine: line,
-                        level: level,
-                        title: title,
-                        id: id,
-                        content: content
-                    ))
-                } else {
-                    results.append(HeadingInfo(
-                        file: file,
-                        lineIndex: idx,
-                        originalLine: line,
-                        level: level,
-                        title: title,
-                        id: nil,
-                        content: cleaned
-                    ))
+                if inFence {
+                    exclusion = .insideCodeFence
+                    headingSource = line
+                } else if trimmed.hasPrefix(">") {
+                    exclusion = .insideBlockquote
+                    headingSource = String(trimmed.drop(while: { $0 == ">" || $0 == " " || $0 == "\t" }))
+                } else if trimmed.hasPrefix("|") {
+                    exclusion = .insideTable
+                    // Only observe when a cell looks like a bare ATX heading.
+                    let unpiped = trimmed
+                        .trimmingCharacters(in: CharacterSet(charactersIn: "|"))
+                        .trimmingCharacters(in: .whitespaces)
+                    guard unpiped.hasPrefix("#") else { continue }
+                    headingSource = unpiped
                 }
+
+                guard let (level, title) = MarkdownSources.parseATXHeading(headingSource) else {
+                    continue
+                }
+
+                if exclusion == nil, level < minLevel || level > maxLevel {
+                    exclusion = .deeperThanMaxLevel(level: level, maxLevel: maxLevel)
+                }
+
+                let cleaned = HeadingNumberer.stripOutlinePrefix(from: title)
+                let info: HeadingInfo?
+                if exclusion == nil {
+                    if let (id, content) = parseID(from: cleaned) {
+                        info = HeadingInfo(
+                            file: file,
+                            lineIndex: idx,
+                            originalLine: line,
+                            level: level,
+                            title: title,
+                            id: id,
+                            content: content
+                        )
+                    } else {
+                        info = HeadingInfo(
+                            file: file,
+                            lineIndex: idx,
+                            originalLine: line,
+                            level: level,
+                            title: title,
+                            id: nil,
+                            content: cleaned
+                        )
+                    }
+                } else {
+                    info = nil
+                }
+
+                observations.append(HeadingObservation(
+                    file: file,
+                    lineIndex: idx,
+                    level: level,
+                    originalLine: line,
+                    title: title,
+                    exclusion: exclusion,
+                    info: info
+                ))
             }
         }
 
-        return results
+        return HeadingScan(maxLevel: maxLevel, observations: observations)
     }
 
     struct DriftFinding: Equatable, Sendable {
@@ -323,6 +446,8 @@ enum IdsManager {
         var showDiff: Bool = false
         /// Warn when git has uncommitted changes in files about to be rewritten.
         var checkGit: Bool = true
+        /// When true, list every eligible heading considered for IDs (#43).
+        var verbose: Bool = false
         /// Override TTY detection (`nil` = detect via `isatty`). Used by tests.
         var isInteractive: Bool? = nil
         /// Override confirmation prompt. Return `true` to proceed. Used by tests.
@@ -332,8 +457,8 @@ enum IdsManager {
         /// Build-time mode for banner wording (#38). Ignored unless `autoAssignContext` is true.
         var buildAssignMode: BuildAssignMode? = nil
 
-        static func dryRunOnly(showDiff: Bool = false) -> AssignOptions {
-            AssignOptions(dryRun: true, assumeYes: true, showDiff: showDiff)
+        static func dryRunOnly(showDiff: Bool = false, verbose: Bool = false) -> AssignOptions {
+            AssignOptions(dryRun: true, assumeYes: true, showDiff: showDiff, verbose: verbose)
         }
 
         /// Options for build-time assign under #38 policy.
@@ -419,7 +544,8 @@ enum IdsManager {
             }
         }
 
-        let headings = try collectHeadings(project: project)
+        let scan = try scanHeadings(project: project)
+        let headings = scan.eligible
 
         // Collaboration preflight (#39): duplicate live ID claims (ID hygiene only).
         let collab = collectCollaborationHazards(project: project, headings: headings)
@@ -521,16 +647,18 @@ enum IdsManager {
         // under technical specifications gets TS without needing the word "specification" in the title.
         let fileContextPrefix = dominantPrefixByFile(in: headings)
 
-        // Assign new IDs
+        // Assign new IDs; record skip reasons for feedback (#43)
         var newlyAssigned: [(info: HeadingInfo, newID: String)] = []
-        var skippedCount = 0
-        var skippedExamples: [String] = []
+        var assignSkips: [(info: HeadingInfo, reason: HeadingSkipReason)] = []
         for h in headingsNeedingID {
+            let cleanedTitle = HeadingNumberer.stripOutlinePrefix(from: h.title)
+            if let detail = diagnoseUnrecognizedIDForm(in: cleanedTitle) {
+                // Do not inject a second ID on top of a near-miss form like `BR-001: …`.
+                assignSkips.append((h, .unrecognizedIDForm(detail: detail)))
+                continue
+            }
             guard let prefix = resolvePrefix(for: h, fileContextPrefix: fileContextPrefix[h.file]) else {
-                skippedCount += 1
-                if skippedExamples.count < 3 {
-                    skippedExamples.append("\(h.content) [\(h.file.lastPathComponent)]")
-                }
+                assignSkips.append((h, .noPrefixInferred))
                 continue
             }
             // #33: always max+1 per prefix; never reuse gaps or orphaned numbers
@@ -539,16 +667,14 @@ enum IdsManager {
             newlyAssigned.append((h, newID))
         }
 
-        if skippedCount > 0 {
-            print("ℹ️  Skipped \(skippedCount) heading(s) (no prefix inferred — these are likely structural/document sections rather than traceable items like requirements, constraints or diagrams).")
-            for ex in skippedExamples {
-                print("    e.g. \(ex)")
-            }
-            if skippedCount > skippedExamples.count {
-                print("    ... and \(skippedCount - skippedExamples.count) more")
-            }
-            print("    Tip: put the item in a section file (e.g. 008-technical-specifications.md), use a keyword in the title, or add a manual ID like `## TS3: …`.")
-        }
+        printHeadingScanFeedback(
+            scan: scan,
+            headingsWithIDs: headings.filter { $0.id != nil }.count,
+            headingsNeedingID: headingsNeedingID.count,
+            newlyAssigned: newlyAssigned,
+            assignSkips: assignSkips,
+            verbose: options.verbose
+        )
 
         // Planned Markdown rewrites (by file) — used for dry-run, diff, preflight, and apply.
         let byFile = Dictionary(grouping: newlyAssigned, by: { $0.info.file })
@@ -1325,6 +1451,209 @@ enum IdsManager {
     }
 
     // MARK: - Helpers
+
+    // MARK: Assign skip feedback (#43)
+
+    /// Print which headings were considered and why others were skipped (#43).
+    private static func printHeadingScanFeedback(
+        scan: HeadingScan,
+        headingsWithIDs: Int,
+        headingsNeedingID: Int,
+        newlyAssigned: [(info: HeadingInfo, newID: String)],
+        assignSkips: [(info: HeadingInfo, reason: HeadingSkipReason)],
+        verbose: Bool
+    ) {
+        let eligible = scan.eligible
+        let excluded = scan.excluded
+        let deeper = excluded.filter {
+            if case .deeperThanMaxLevel = $0.exclusion { return true }
+            return false
+        }
+        let inFence = excluded.filter { $0.exclusion == .insideCodeFence }
+        let inQuote = excluded.filter { $0.exclusion == .insideBlockquote }
+        let inTable = excluded.filter { $0.exclusion == .insideTable }
+        let exclusionZoneCount = inFence.count + inQuote.count + inTable.count
+
+        print("📋 Heading scan (#43) — ids.heading_max_level=\(scan.maxLevel) (eligible: H1–H\(scan.maxLevel))")
+        print("   Considered for ID ownership: \(eligible.count)")
+        print("     • already have IDs: \(headingsWithIDs)")
+        print("     • missing IDs this pass: \(headingsNeedingID)")
+        print("       – will assign: \(newlyAssigned.count)")
+        print("       – skipped: \(assignSkips.count)")
+        if !excluded.isEmpty {
+            print("   Not eligible for ownership:")
+            if !deeper.isEmpty {
+                print("     • deeper than H\(scan.maxLevel): \(deeper.count)")
+            }
+            if exclusionZoneCount > 0 {
+                print("     • in code fence / blockquote / table: \(exclusionZoneCount)")
+                if !inFence.isEmpty { print("         – code fence: \(inFence.count)") }
+                if !inQuote.isEmpty { print("         – blockquote: \(inQuote.count)") }
+                if !inTable.isEmpty { print("         – table: \(inTable.count)") }
+            }
+        }
+
+        if verbose {
+            print("   Eligible headings considered:")
+            for h in eligible {
+                let idPart = h.id.map { " [\($0)]" } ?? " [no ID]"
+                print("     • \(h.file.lastPathComponent):\(h.lineIndex + 1)  H\(h.level)\(idPart)  \(h.content)")
+            }
+            if eligible.isEmpty {
+                print("     (none)")
+            }
+        } else if !eligible.isEmpty {
+            print("   Tip: pass --verbose to list every eligible heading considered.")
+        }
+
+        // Excluded headings that look like ID attempts — high-value confusion cases
+        var interestingExcluded: [(HeadingObservation, HeadingSkipReason, String?)] = []
+        for obs in excluded {
+            guard let reason = obs.exclusion else { continue }
+            let cleaned = HeadingNumberer.stripOutlinePrefix(from: obs.title)
+            let malformed = diagnoseUnrecognizedIDForm(in: cleaned)
+            let hasKnownPrefixToken = cleaned.range(
+                of: #"\b(?:BR|TS|UC|ADR|BDR|TC|BC|REF|DIAG|REV)\d+"#,
+                options: .regularExpression
+            ) != nil
+            // Always surface deeper-level headings that already use a valid leading ID form,
+            // or any exclusion with a near-miss / ID-like token.
+            let looksIntentional: Bool
+            if parseID(from: cleaned) != nil {
+                looksIntentional = true
+            } else if malformed != nil || hasKnownPrefixToken {
+                looksIntentional = true
+            } else {
+                looksIntentional = false
+            }
+            if looksIntentional {
+                interestingExcluded.append((obs, reason, malformed))
+            }
+        }
+
+        if !interestingExcluded.isEmpty {
+            print("⚠️  Headings that look ID-related but are not eligible owners:")
+            let limit = 20
+            for (obs, reason, malformed) in interestingExcluded.prefix(limit) {
+                print("   \(obs.location)  H\(obs.level)  \(obs.title)")
+                if let malformed {
+                    print("     reason: \(malformed)")
+                    print("     tip: \(HeadingSkipReason.unrecognizedIDForm(detail: malformed).syntaxTip)")
+                } else {
+                    print("     reason: \(reason.shortLabel)")
+                    print("     tip: \(reason.syntaxTip)")
+                }
+            }
+            if interestingExcluded.count > limit {
+                print("   ... and \(interestingExcluded.count - limit) more")
+            }
+        }
+
+        if !assignSkips.isEmpty {
+            print("ℹ️  Skipped \(assignSkips.count) eligible heading(s) (no ID assigned):")
+            let limit = 25
+            for (h, reason) in assignSkips.prefix(limit) {
+                print("   \(h.file.lastPathComponent):\(h.lineIndex + 1)  H\(h.level)  \(h.content)")
+                print("     reason: \(reason.shortLabel)")
+                print("     tip: \(reason.syntaxTip)")
+            }
+            if assignSkips.count > limit {
+                print("   ... and \(assignSkips.count - limit) more")
+            }
+            print("   Preferred owning form: `## BR1: Descriptive title` (see docs/traceability-ids.md).")
+        }
+    }
+
+    /// Detect near-miss owning-ID forms after outline strip (#31 / #43).
+    /// Returns a human-readable detail when the title looks like an attempted ID but is invalid.
+    static func diagnoseUnrecognizedIDForm(in title: String) -> String? {
+        let t = title.trimmingCharacters(in: .whitespaces)
+        guard !t.isEmpty else { return nil }
+
+        // Already valid — not a near miss.
+        if parseID(from: t) != nil { return nil }
+
+        // Dashed / underscored legacy: BR-001, TS_42
+        if let m = matchFirst(t, pattern: #"^([A-Za-z]{1,4})[-_]0*([0-9]+)\b(.*)$"#) {
+            let prefix = m[1].uppercased()
+            let num = m[2]
+            let rest = m[3].trimmingCharacters(in: .whitespacesAndNewlines)
+            if knownPrefixes.contains(prefix) {
+                let suggestedNum = num.replacingOccurrences(of: "^0+", with: "", options: .regularExpression)
+                let normalizedNum = suggestedNum.isEmpty ? "0" : suggestedNum
+                let body = rest.isEmpty ? "Title" : rest.trimmingCharacters(in: CharacterSet(charactersIn: ":./ ").union(.whitespaces))
+                return "legacy/dashed form '\(prefix)-\(num)' is not an owning ID; use \(prefix)\(normalizedNum == "0" ? num : normalizedNum) (no dash, no padding), e.g. `## \(prefix)\(normalizedNum == "0" ? "1" : normalizedNum): \(body.isEmpty ? "Title" : body)`"
+            }
+        }
+
+        // Leading zero padding: BR01, TS007
+        if let m = matchFirst(t, pattern: #"^([A-Z]{1,4})0+([0-9]+)\b(.*)$"#) {
+            let prefix = m[1]
+            let num = m[2]
+            if knownPrefixes.contains(prefix) {
+                return "zero-padded ID '\(prefix)0\(num)' is not valid; use \(prefix)\(num) with no leading zeros"
+            }
+        }
+
+        // Lowercase prefix: br1, ts2
+        if let m = matchFirst(t, pattern: #"^([a-z]{1,4})([1-9][0-9]*)\b(.*)$"#) {
+            let prefix = m[1].uppercased()
+            let num = m[2]
+            if knownPrefixes.contains(prefix) {
+                return "ID prefixes are case-sensitive; use \(prefix)\(num) not \(m[1])\(num)"
+            }
+        }
+
+        // Bracketed: [BR1], (TS2)
+        if let m = matchFirst(t, pattern: #"^[\[\(]([A-Z]{1,4})([1-9][0-9]*)[\]\)](.*)$"#) {
+            let prefix = m[1]
+            let num = m[2]
+            if knownPrefixes.contains(prefix) {
+                return "bracketed '\(prefix)\(num)' is not an owning ID; use leading \(prefix)\(num): without brackets"
+            }
+        }
+
+        // Known prefix + digits but missing delimiter before rest, or unknown junk
+        if let m = matchFirst(t, pattern: #"^([A-Z]{1,4})([1-9][0-9]*)([^:.\s].*)$"#) {
+            let prefix = m[1]
+            let num = m[2]
+            if knownPrefixes.contains(prefix) {
+                return "\(prefix)\(num) must be followed by ':' / '.' / whitespace before the title (got '\(m[3].prefix(12))…')"
+            }
+        }
+
+        // Bare ID with no delimiter/title: `BR1`
+        if let m = matchFirst(t, pattern: #"^([A-Z]{1,4})([1-9][0-9]*)$"#) {
+            let prefix = m[1]
+            let num = m[2]
+            if knownPrefixes.contains(prefix) {
+                return "\(prefix)\(num) must be followed by ':' / '.' / whitespace and a title, e.g. `## \(prefix)\(num): Title`"
+            }
+            return "prefix '\(prefix)' is not a known ID prefix (\(knownPrefixes.joined(separator: ", ")))"
+        }
+
+        // Unknown PREFIX + digits + delimiter (e.g. FOO1: Title)
+        if let m = matchFirst(t, pattern: #"^([A-Z]{1,4})([1-9][0-9]*)([:.\s].*)$"#) {
+            let prefix = m[1]
+            if !knownPrefixes.contains(prefix) {
+                return "prefix '\(prefix)' is not a known ID prefix (\(knownPrefixes.joined(separator: ", ")))"
+            }
+        }
+
+        return nil
+    }
+
+    private static func matchFirst(_ text: String, pattern: String) -> [String]? {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let ns = text as NSString
+        guard let m = regex.firstMatch(in: text, range: NSRange(0..<ns.length)) else { return nil }
+        var parts: [String] = []
+        for i in 0..<m.numberOfRanges {
+            let r = m.range(at: i)
+            parts.append(r.location == NSNotFound ? "" : ns.substring(with: r))
+        }
+        return parts
+    }
 
     /// Parses a traceability ID from an outline-stripped heading title according to the
     /// exact syntax rules defined in issue #31.

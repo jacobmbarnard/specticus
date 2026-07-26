@@ -99,6 +99,21 @@ commit Markdown + .specticus/ids.json together
 5. **Build** — `specticus build` generates HTML. Prefer **not** mutating sources during build.
 6. **Commit store + sources** — treat `.specticus/ids.json` (and audit log if present) as part of the same change set as the Markdown.
 
+### Reading `ids assign` skip feedback (#43)
+
+Every `ids assign` (including `--dry-run`) prints a **heading scan** summary:
+
+- How many headings were **considered** for ownership (eligible levels, not in code fences / quotes / tables)
+- How many already have IDs, will be assigned, or were **skipped**
+- Counts of headings **not eligible** (too deep for `ids.heading_max_level`, or inside exclusion zones)
+- Per skipped heading: **reason** + **syntax tip**
+- Near-miss forms (`BR-001`, `br1`, `[BR1]`, zero-padding) are called out instead of silently getting a second ID injected
+
+```bash
+specticus ids assign --dry-run
+specticus ids assign --dry-run --verbose   # list every eligible heading considered
+```
+
 ### When you only reword an existing requirement
 
 Keep the **same ID**, change the descriptive text, then:
@@ -305,6 +320,7 @@ Independent of:
 # Assign
 specticus ids assign --dry-run
 specticus ids assign --dry-run --diff
+specticus ids assign --dry-run --verbose   # list every eligible heading (#43)
 specticus ids assign --yes
 
 # Inspect
