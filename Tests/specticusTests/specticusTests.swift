@@ -2753,3 +2753,137 @@ private func makeLifecycleFixture(
     #expect(!hazards.hasBlockingProblems)
     #expect(hazards.duplicateIDs.isEmpty)
 }
+
+// MARK: - Assign skip feedback (#43)
+
+@Test func diagnoseUnrecognizedIDFormDetectsNearMisses() {
+    #expect(IdsManager.diagnoseUnrecognizedIDForm(in: "BR-001: Legacy") != nil)
+    #expect(IdsManager.diagnoseUnrecognizedIDForm(in: "BR-001: Legacy")!.contains("legacy")
+        || IdsManager.diagnoseUnrecognizedIDForm(in: "BR-001: Legacy")!.contains("dash"))
+    #expect(IdsManager.diagnoseUnrecognizedIDForm(in: "br1: Lowercase") != nil)
+    #expect(IdsManager.diagnoseUnrecognizedIDForm(in: "[BR1]: Brackets") != nil)
+    #expect(IdsManager.diagnoseUnrecognizedIDForm(in: "BR01: Padded") != nil)
+    #expect(IdsManager.diagnoseUnrecognizedIDForm(in: "FOO1: Unknown") != nil)
+    #expect(IdsManager.diagnoseUnrecognizedIDForm(in: "BR1") != nil)
+    // Valid owning form is not a near-miss
+    #expect(IdsManager.diagnoseUnrecognizedIDForm(in: "BR1: User Login") == nil)
+    // Plain language is not a near-miss
+    #expect(IdsManager.diagnoseUnrecognizedIDForm(in: "Document Metadata") == nil)
+}
+
+@Test func scanHeadingsReportsDeeperLevelsAndCodeFences() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-scan-43-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    try """
+    # Overview
+    ## BR1: Eligible
+    ### BR2: Too Deep
+    ```
+    ## BR9: Inside Fence
+    ```
+    > ## BR8: Quoted Example
+    ## Plain structural
+    """.write(to: tmp.appendingPathComponent("notes.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    let scan = try IdsManager.scanHeadings(project: project)
+
+    // Eligible: H1 Overview, H2 BR1, H2 Plain structural (default max level 2)
+    #expect(scan.eligible.count == 3)
+    #expect(scan.eligible.contains { $0.id == "BR1" })
+    #expect(scan.eligible.contains { $0.id == nil && $0.content == "Overview" })
+    #expect(scan.eligible.contains { $0.id == nil && $0.content == "Plain structural" })
+
+    let deeper = scan.excluded.filter {
+        if case .deeperThanMaxLevel = $0.exclusion { return true }
+        return false
+    }
+    #expect(deeper.contains { $0.title.contains("Too Deep") })
+
+    let fences = scan.excluded.filter { $0.exclusion == .insideCodeFence }
+    #expect(fences.contains { $0.title.contains("Inside Fence") })
+
+    let quotes = scan.excluded.filter { $0.exclusion == .insideBlockquote }
+    #expect(quotes.contains { $0.title.contains("Quoted Example") })
+
+    // collectHeadings must match eligible subset (no fence/quote/deep owners)
+    let collected = try IdsManager.collectHeadings(project: project)
+    #expect(collected.count == scan.eligible.count)
+    #expect(Set(collected.compactMap(\.id)) == Set(scan.eligible.compactMap(\.id)))
+}
+
+@Test func idsAssignSkipsLegacyIDFormWithoutInjectingSecondID() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-legacy-skip-43-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let mdURL = tmp.appendingPathComponent("007-business-requirements.md")
+    try """
+    # Requirements
+    ## BR-001: Legacy Style
+    ## Shall authenticate users with SSO
+    """.write(to: mdURL, atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    try IdsManager.assignIDs(project: project, dryRun: false)
+
+    let rewritten = try String(contentsOf: mdURL, encoding: .utf8)
+    let lines = rewritten.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    // Must not become `## BR1: BR-001: Legacy Style`
+    #expect(lines.contains("## BR-001: Legacy Style"))
+    #expect(!rewritten.contains("BR1: BR-001"))
+    // Keyword heading still gets a real ID
+    #expect(lines.contains { line in
+        line.hasPrefix("## BR") && line.contains("Shall authenticate") && !line.contains("BR-001")
+    })
+}
+
+@Test func idsAssignDryRunCompletesWithSkipFeedback() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-skip-feedback-43-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    try """
+    # Overview
+    ## BR1: Login
+    ## Glossary Terms
+    ### Nested detail without ID
+    """.write(to: tmp.appendingPathComponent("001-overview.md"), atomically: true, encoding: .utf8)
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+    try """
+    {
+      "version": 1,
+      "bindings": { "BR1": "Login" },
+      "counters": { "BR": 1 }
+    }
+    """.write(to: specticusDir.appendingPathComponent("ids.json"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    // Should not throw; prints scan summary including skipped structural headings (#43)
+    try IdsManager.assignIDs(project: project, options: .dryRunOnly(showDiff: false, verbose: true))
+    let scan = try IdsManager.scanHeadings(project: project)
+    #expect(scan.maxLevel == 2)
+    #expect(scan.excluded.contains {
+        if case .deeperThanMaxLevel = $0.exclusion { return $0.title.contains("Nested") }
+        return false
+    })
+}
