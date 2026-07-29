@@ -124,10 +124,9 @@ invitation if it no longer fits direction or capacity.
 
 ## Security
 
-Do not file public issues for sensitive security reports if a private channel
-is available. Prefer the process described in `SECURITY.md` once that document
-exists; until then, contact the original creator privately through a
-maintainer-visible channel on GitHub when possible.
+Do not file public issues for sensitive or exploitable security reports.
+Follow the process in **[SECURITY.md](SECURITY.md)** (preferred: GitHub private
+vulnerability reporting).
 
 ## License of contributions
 

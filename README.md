@@ -149,9 +149,13 @@ Optional: if git is present, `ids assign` may print a soft dirty-path hint for f
 
 ## Contributing
 
-Contributions are welcome! Please open an issue first to discuss larger changes.
+specticus is **maintainer-driven**. See **[CONTRIBUTING.md](CONTRIBUTING.md)** for
+project posture, invited collaboration, and how to report ordinary bugs.
 
-See the [issues labeled "good first issue"](https://github.com/jacobmbarnard/specticus/labels/good%20first%20issue) for smaller tasks.
+## Security
+
+To report a vulnerability privately, see **[SECURITY.md](SECURITY.md)**. Do not
+open public issues for exploitable security problems.
 
 ## License
 
