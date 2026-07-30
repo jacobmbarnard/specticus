@@ -152,6 +152,11 @@ Optional: if git is present, `ids assign` may print a soft dirty-path hint for f
 specticus is **maintainer-driven**. See **[CONTRIBUTING.md](CONTRIBUTING.md)** for
 project posture, invited collaboration, and how to report ordinary bugs.
 
+## Code of conduct
+
+Project spaces should stay professional and on-topic. See
+**[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)**.
+
 ## Security
 
 To report a vulnerability privately, see **[SECURITY.md](SECURITY.md)**. Do not

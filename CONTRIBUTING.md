@@ -5,6 +5,9 @@ Thank you for your interest in specticus. The project is released under the
 software. Contribution of changes to *this* repository is managed more
 selectively, as described below.
 
+Behavioral expectations for project spaces are in
+**[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)**.
+
 ## Project posture
 
 specticus is **maintainer-driven**. Product direction, backlog, and day-to-day
