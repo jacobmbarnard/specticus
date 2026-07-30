@@ -13,11 +13,12 @@ as described in [docs/release-process.md](docs/release-process.md).
 - Maintainer-driven contribution guide (`CONTRIBUTING.md`)
 - Security policy and private vulnerability reporting guidance (`SECURITY.md`)
 - Release process, versioning, and changelog policy (`docs/release-process.md`)
+- Simple project code of conduct (`CODE_OF_CONDUCT.md`)
 
 ### Changed
 
 - README contributing section aligned with maintainer-driven posture; security
-  pointer added
+  and code of conduct pointers added
 
 <!--
 When cutting a release:
