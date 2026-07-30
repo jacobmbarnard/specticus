@@ -122,6 +122,18 @@ invitation if it no longer fits direction or capacity.
   community queue. Please do not assume ownership of triage, assignment, or
   release process unless that responsibility has been explicitly delegated.
 
+## Versioning and releases
+
+Release authority stays with the original creator. Versioning (SemVer),
+changelog maintenance, tagging, GitHub Releases, and backport policy are
+defined in **[docs/release-process.md](docs/release-process.md)**. User-facing
+history lives in **[CHANGELOG.md](CHANGELOG.md)**.
+
+Invited collaborators should note user-visible changes under
+`CHANGELOG.md`’s `[Unreleased]` section (or call them out in the PR so they can
+be recorded before release). Do not cut tags or GitHub Releases unless that
+step was explicitly delegated.
+
 ## Security
 
 Do not file public issues for sensitive or exploitable security reports.

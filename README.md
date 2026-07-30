@@ -157,6 +157,14 @@ project posture, invited collaboration, and how to report ordinary bugs.
 To report a vulnerability privately, see **[SECURITY.md](SECURITY.md)**. Do not
 open public issues for exploitable security problems.
 
+## Versioning and releases
+
+specticus uses Semantic Versioning. See **[CHANGELOG.md](CHANGELOG.md)** for
+user-facing history and **[docs/release-process.md](docs/release-process.md)** for
+how versions, tags, and GitHub Releases are cut. The CLI reports its version via
+`specticus --version` (currently aligned with development as **0.1.0** until the
+first tagged release freezes a changelog section).
+
 ## License
 
 specticus is released under the [Apache 2.0 License](LICENSE).
