@@ -4,7 +4,7 @@ Participation in the specticus project—issues, pull requests, discussions, and
 related GitHub spaces—should stay **professional, constructive, and on-topic**.
 
 This is a **software project**. It is not a venue for interpersonal drama,
-political campaigning, or identity disputes.
+political campaigning, or social/personal disputes.
 
 ## Expectations
 
