@@ -22,7 +22,24 @@ Writing specifications in Markdown keeps them close to the code and under versio
 
 ## Installation
 
-### From source (current)
+### macOS (Homebrew) — preferred
+
+```bash
+brew tap jacobmbarnard/specticus https://github.com/jacobmbarnard/specticus
+brew install specticus
+```
+
+This **builds from source** with Swift Package Manager (no bottle yet). You need
+Homebrew plus **Xcode / Swift 6.2+**. The first install may take several minutes
+while dependencies compile.
+
+```bash
+specticus --version
+```
+
+Maintainer notes (stable tags, formula bumps): **[docs/homebrew.md](docs/homebrew.md)**.
+
+### From source
 
 ```bash
 git clone https://github.com/jacobmbarnard/specticus.git
@@ -31,7 +48,8 @@ swift build -c release
 cp .build/release/specticus ~/.local/bin/specticus
 ```
 
-> **Planned:** Binary releases, Windows installer (#61), Linux packages via apt/yum (#62), and Homebrew support.
+> **Later:** Prebuilt GitHub Release binaries (#120), Linux packages (#61),
+> Windows installer (#62).
 
 ## Quick Start
 
