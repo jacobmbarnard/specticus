@@ -14,11 +14,13 @@ as described in [docs/release-process.md](docs/release-process.md).
 - Security policy and private vulnerability reporting guidance (`SECURITY.md`)
 - Release process, versioning, and changelog policy (`docs/release-process.md`)
 - Simple project code of conduct (`CODE_OF_CONDUCT.md`)
+- Homebrew formula (`Formula/specticus.rb`) and install docs (`docs/homebrew.md`)
 
 ### Changed
 
 - README contributing section aligned with maintainer-driven posture; security
   and code of conduct pointers added
+- README installation prefers Homebrew on macOS; source build is secondary
 
 <!--
 When cutting a release:

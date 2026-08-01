@@ -188,8 +188,12 @@ extraordinary circumstances (and document why if it ever happens).
 - [ ] Verify `specticus --version` on a release build of that commit prints
       `X.Y.Z`
 - [ ] Confirm the GitHub Release page renders correctly
-- [ ] Note any follow-ups (Homebrew, packages, announce) without blocking the
-      tag on unfinished distribution work
+- [ ] **Homebrew:** bump `Formula/specticus.rb` stable `tag` / `revision` /
+      `version` to match this release (see [docs/homebrew.md](homebrew.md)).
+      Prefer a follow-up PR if the formula bump was not in the release metadata
+      commit.
+- [ ] Note any follow-ups (binaries #120, packages, announce) without blocking
+      the tag on unfinished distribution work
 
 ## Maintenance and backport policy
 
