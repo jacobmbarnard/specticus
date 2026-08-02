@@ -13,6 +13,7 @@ struct Specticus: ParsableCommand {
             Init.self,
             Lint.self,
             Clean.self,
+            Open.self,
             Ids.self
         ],
         defaultSubcommand: Build.self

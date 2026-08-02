@@ -2887,3 +2887,80 @@ private func makeLifecycleFixture(
         return false
     })
 }
+
+// MARK: - Open command (#122)
+
+@Test func openResolvedPathPrefersCLIOverride() {
+    let path = OpenHTML.resolvedRelativePath(
+        outputOverride: "custom/out.html",
+        defaultOutput: "output/index.html"
+    )
+    #expect(path == "custom/out.html")
+}
+
+@Test func openResolvedPathUsesDefaultWhenOverrideNil() {
+    let path = OpenHTML.resolvedRelativePath(
+        outputOverride: nil,
+        defaultOutput: "output/index.html"
+    )
+    #expect(path == "output/index.html")
+}
+
+@Test func openResolvedPathTreatsEmptyOverrideAsDefault() {
+    let path = OpenHTML.resolvedRelativePath(
+        outputOverride: "",
+        defaultOutput: "dist/docs.html"
+    )
+    #expect(path == "dist/docs.html")
+}
+
+@Test func openRequireExistingFileAcceptsPresentFile() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-open-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let html = tmp.appendingPathComponent("index.html")
+    try "<html></html>".write(to: html, atomically: true, encoding: .utf8)
+
+    try OpenHTML.requireExistingFile(at: html, displayPath: "index.html")
+}
+
+@Test func openRequireExistingFileRejectsMissingFile() {
+    let missing = URL(fileURLWithPath: "/tmp/specticus-does-not-exist-\(UUID().uuidString).html")
+    do {
+        try OpenHTML.requireExistingFile(at: missing, displayPath: "output/index.html")
+        Issue.record("Expected error for missing HTML")
+    } catch {
+        let message = String(describing: error)
+        #expect(message.contains("specticus build") || message.contains("not found"))
+    }
+}
+
+@Test func openRequireExistingFileRejectsDirectory() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-open-dir-\(UUID().uuidString)", isDirectory: true)
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    do {
+        try OpenHTML.requireExistingFile(at: tmp, displayPath: "output")
+        Issue.record("Expected error for directory path")
+    } catch {
+        #expect(String(describing: error).contains("directory"))
+    }
+}
+
+@Test func openLaunchSpecIsPlatformAppropriate() throws {
+    let (executable, args) = try SystemBrowser.launchSpec(for: "/tmp/example.html")
+    #expect(args.contains("/tmp/example.html"))
+    #if os(macOS)
+    #expect(executable == "/usr/bin/open")
+    #elseif os(Windows)
+    #expect(executable == "cmd.exe")
+    #else
+    #expect(executable.contains("xdg-open"))
+    #endif
+}

@@ -15,7 +15,7 @@ Writing specifications in Markdown keeps them close to the code and under versio
 - **Specifications as code** — Author in plain Markdown, generate beautiful HTML
 - **Traceability IDs** — Stable, human-readable identifiers (`BR1`, `TS2`, etc.) with drift detection
 - **Clean output** — Light/dark theme support, printable, well-structured HTML
-- **Powerful CLI** — `init`, `build`, `lint`, `clean`, and `ids` subcommands
+- **Powerful CLI** — `init`, `build`, `open`, `lint`, `clean`, and `ids` subcommands
 - **Fast** — Written in Swift with minimal dependencies
 
 **Using IDs for the first time?** Read **[Traceability IDs: recommended workflow and common pitfalls](docs/traceability-ids.md)** — syntax, when to assign vs lint vs build, drift, orphans, team patterns, and recovery recipes (#41).
@@ -62,6 +62,9 @@ cd MySpecs
 # Build HTML documentation
 specticus build
 
+# Open the built HTML in your default browser
+specticus open
+
 # Check for issues
 specticus lint
 
@@ -99,6 +102,7 @@ Avoid `--assign-ids` in CI or shared checkouts unless that is intentional. Prefe
 | `init`               | Initialize a new specticus project                               |
 | `build`              | Generate HTML documentation                                      |
 | `build --assign-ids` | Build **and** run `ids assign` (rewrites Markdown; opt-in, #38)  |
+| `open`               | Open built HTML in the default browser (`build.output` / `--output`) |
 | `lint`               | Validate structure and IDs                                       |
 | `clean`              | Remove generated output                                          |
 | `ids assign`         | Assign missing IDs (rewrites Markdown; use `--dry-run` / `--yes`) |
