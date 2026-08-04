@@ -2,7 +2,7 @@
 #
 # Install (from this repository used as a tap):
 #   brew tap jacobmbarnard/specticus https://github.com/jacobmbarnard/specticus
-#   brew install specticus
+#   brew install --HEAD specticus
 #
 # See docs/homebrew.md for maintainer notes (stable tags, sha/revision bumps).
 
@@ -30,7 +30,26 @@ class Specticus < Formula
            "--disable-sandbox",
            "--configuration", "release",
            "--product", "specticus"
-    bin.install ".build/release/specticus"
+
+    # SPM places the executable and its resource bundle (Bundle.module) next to each
+    # other under .build/release/. The binary alone is not enough: `init` loads the
+    # Skeleton templates from specticus_specticus.bundle. Install both into libexec
+    # and expose a bin wrapper so the bundle remains adjacent to the real binary.
+    release_dir = buildpath/".build/release"
+    odie "Release build product missing: #{release_dir}/specticus" unless (release_dir/"specticus").exist?
+
+    libexec.install release_dir/"specticus"
+
+    # macOS: specticus_specticus.bundle; Linux SPM: specticus_specticus.resources
+    resource_artifacts =
+      Dir[release_dir/"specticus_*.bundle"] +
+      Dir[release_dir/"specticus_*.resources"]
+    odie "SPM resource bundle missing after release build (expected specticus_*.bundle or *.resources)" if resource_artifacts.empty?
+    libexec.install resource_artifacts
+
+    # Thin PATH wrapper so Bundle.main resolves next to the real binary in libexec
+    # (not next to a lone copy in bin/, which breaks `specticus init`).
+    bin.write_exec_script libexec/"specticus"
   end
 
   def caveats
@@ -39,11 +58,18 @@ class Specticus < Formula
       Requires Xcode (or another Swift 6.2+ toolchain). The first install
       fetches package dependencies and compiles; no bottle is published yet.
 
+      The CLI and its resource bundle live under libexec; `specticus` in PATH
+      is a thin wrapper so Bundle.module (init templates) resolves correctly.
+
       Prebuilt GitHub Release binaries are deferred (see project issue #120).
     EOS
   end
 
   test do
     assert_match(/\d+\.\d+\.\d+/, shell_output("#{bin}/specticus --version"))
+    # Bundle.module must resolve (regression for bin-only install).
+    system bin/"specticus", "init", "myspecs"
+    assert_path_exists testpath/"myspecs/.specticus/config.yml"
+    assert_path_exists testpath/"myspecs/001-document-metadata.md"
   end
 end

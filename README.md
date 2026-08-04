@@ -45,8 +45,18 @@ Maintainer notes (stable tags, formula bumps): **[docs/homebrew.md](docs/homebre
 git clone https://github.com/jacobmbarnard/specticus.git
 cd specticus
 swift build -c release
-cp .build/release/specticus ~/.local/bin/specticus
+# Install the binary *and* its SPM resources side-by-side (required for `init`).
+# macOS: specticus_*.bundle · Linux: specticus_*.resources
+mkdir -p ~/.local/libexec/specticus
+cp .build/release/specticus ~/.local/libexec/specticus/
+cp -R .build/release/specticus_*.bundle .build/release/specticus_*.resources \
+  ~/.local/libexec/specticus/ 2>/dev/null || true
+printf '%s\n' '#!/bin/sh' 'exec "$HOME/.local/libexec/specticus/specticus" "$@"' > ~/.local/bin/specticus
+chmod +x ~/.local/bin/specticus
 ```
+
+Copying only the binary (without the SPM resource bundle/dir) breaks `specticus init`
+with a “could not load resource bundle” fatal error.
 
 > **Later:** Prebuilt GitHub Release binaries (#120), Linux packages (#61),
 > Windows installer (#62).

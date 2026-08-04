@@ -8,6 +8,11 @@ as described in [docs/release-process.md](docs/release-process.md).
 
 ## [Unreleased]
 
+### Fixed
+
+- Homebrew (and manual) installs ship the SPM resource bundle with the binary so
+  `specticus init` can load embedded Skeleton templates (`Bundle.module`)
+
 ### Added
 
 - Maintainer-driven contribution guide (`CONTRIBUTING.md`)
