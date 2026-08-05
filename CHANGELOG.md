@@ -10,6 +10,7 @@ as described in [docs/release-process.md](docs/release-process.md).
 
 ### Added
 
+- `specticus open` subcommand to launch built HTML in the default browser (#122)
 - Maintainer-driven contribution guide (`CONTRIBUTING.md`)
 - Security policy and private vulnerability reporting guidance (`SECURITY.md`)
 - Release process, versioning, and changelog policy (`docs/release-process.md`)
