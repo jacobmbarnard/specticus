@@ -8,7 +8,7 @@ The **specticus GitHub repository itself** is the first-party tap (no separate
 
 ```bash
 brew tap jacobmbarnard/specticus https://github.com/jacobmbarnard/specticus
-brew install specticus
+brew install --HEAD specticus   # until a stable tag is in the formula
 ```
 
 Then:
@@ -28,12 +28,26 @@ specticus --version
 There is **no bottle** yet. Install compiles on the machine (can take several
 minutes). Prebuilt binaries / bottles are tracked separately (#120).
 
+### Resource bundle (required for `init`)
+
+SwiftPM embeds init templates in `specticus_specticus.bundle` next to the release
+binary (`Bundle.module`). The formula installs the binary **and** that bundle into
+`libexec`, with a thin wrapper on `PATH`. Installing only the binary (e.g. a bare
+`cp .build/release/specticus …`) causes:
+
+```text
+Fatal error: could not load resource bundle: …/specticus_specticus.bundle
+```
+
+Reinstall after formula updates with `brew reinstall --HEAD specticus` (or upgrade
+once a stable version exists).
+
 ### Optional: formula from a local checkout
 
 ```bash
 git clone https://github.com/jacobmbarnard/specticus.git
 cd specticus
-brew install --build-from-source Formula/specticus.rb
+brew install --build-from-source --HEAD Formula/specticus.rb
 ```
 
 ## Why in-repo (not homebrew-core)
