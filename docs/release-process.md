@@ -179,9 +179,11 @@ extraordinary circumstances (and document why if it ever happens).
 - [ ] Title: `vX.Y.Z` (or `specticus vX.Y.Z`)
 - [ ] Body: paste or summarize the matching `CHANGELOG.md` section
 - [ ] Mark as **pre-release** only when using a pre-release version
-- [ ] Attach build artifacts **when** the project publishes them (optional
-      until binary release automation exists). Until then, document that
-      install is from source per the README.
+- [ ] Confirm **prebuilt binaries** are attached by the
+      [Release binaries](../.github/workflows/release.yml) workflow (tag push
+      `v*`): `.tar.gz` + `.sha256` for each platform in
+      [docs/binaries.md](binaries.md). If the workflow failed, re-run it or
+      package with `scripts/package-release.sh` and upload assets manually.
 
 ### 5. Post-release
 
@@ -192,8 +194,8 @@ extraordinary circumstances (and document why if it ever happens).
       `version` to match this release (see [docs/homebrew.md](homebrew.md)).
       Prefer a follow-up PR if the formula bump was not in the release metadata
       commit.
-- [ ] Note any follow-ups (binaries #120, packages, announce) without blocking
-      the tag on unfinished distribution work
+- [ ] Note any follow-ups (packages #61 / #62, bottles, announce) without
+      blocking the tag if a non-critical distribution follow-up remains
 
 ## Maintenance and backport policy
 
@@ -221,9 +223,9 @@ When a backport does occur:
 |------|--------|
 | CI build/test on `develop` and PRs | In use (`.github/workflows/ci.yml`) |
 | Automated version bump | Not required; manual is fine |
-| Automated GitHub Release on tag | Optional future improvement |
-| Multi-platform binary artifacts | Planned with install/distribution work (#99 and related issues) |
-| Linux/Windows packages | Separate issues (#61, #62); not blockers for defining this process |
+| Automated GitHub Release on tag | Release notes + assets via `release.yml` on `v*` tags (#120) |
+| Multi-platform binary artifacts | `scripts/package-release.sh` + Release binaries workflow (#120) |
+| Linux/Windows packages | Separate issues (#61, #62); may consume the same binary layout |
 
 This policy remains valid when automation is added: automation should implement
 the same version, changelog, and tag rules—not invent a second scheme.
@@ -235,7 +237,8 @@ the same version, changelog, and tag rules—not invent a second scheme.
 | [`CHANGELOG.md`](../CHANGELOG.md) | User-facing history of releases |
 | [`SECURITY.md`](../SECURITY.md) | Vulnerability reporting and supported versions for security fixes |
 | [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Who may contribute code; not a shared release ownership guide |
-| README installation | How users obtain builds (source today; binaries later) |
+| README installation | How users obtain builds (Homebrew, binaries, source) |
+| [`docs/binaries.md`](binaries.md) | Prebuilt archive matrix, install, Gatekeeper notes (#120) |
 
 ## Summary
 
@@ -244,5 +247,5 @@ the same version, changelog, and tag rules—not invent a second scheme.
    sections at release.
 3. Align **tag `vX.Y.Z`**, **CLI version**, **changelog**, and **GitHub Release**.
 4. **Do not** promise LTS; backports are rare and discretionary.
-5. Ship **source-based** releases cleanly first; attach binaries and packages
-   when those pipelines exist.
+5. Align **tag**, **changelog**, **CLI version**, and **GitHub Release** assets
+   (binaries from the release workflow; packages later via #61 / #62).

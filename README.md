@@ -26,7 +26,7 @@ Writing specifications in Markdown keeps them close to the code and under versio
 
 ```bash
 brew tap jacobmbarnard/specticus https://github.com/jacobmbarnard/specticus
-brew install specticus
+brew install --HEAD specticus
 ```
 
 This **builds from source** with Swift Package Manager (no bottle yet). You need
@@ -38,6 +38,22 @@ specticus --version
 ```
 
 Maintainer notes (stable tags, formula bumps): **[docs/homebrew.md](docs/homebrew.md)**.
+
+### Prebuilt binaries (GitHub Releases)
+
+Tagged releases attach archives for **macOS arm64**, **Linux x86_64**, and
+**Linux arm64** (no Swift toolchain required). See
+**[docs/binaries.md](docs/binaries.md)** for the arch matrix, checksums, and
+macOS Gatekeeper notes.
+
+```bash
+# Example — pick the asset matching your OS/arch from the release page:
+tar -xzf specticus-*-linux-x86_64.tar.gz
+mkdir -p "$HOME/.local"
+cp -R specticus-*-linux-x86_64/bin specticus-*-linux-x86_64/libexec "$HOME/.local/"
+export PATH="$HOME/.local/bin:$PATH"
+specticus --version
+```
 
 ### From source
 
@@ -58,8 +74,7 @@ chmod +x ~/.local/bin/specticus
 Copying only the binary (without the SPM resource bundle/dir) breaks `specticus init`
 with a “could not load resource bundle” fatal error.
 
-> **Later:** Prebuilt GitHub Release binaries (#120), Linux packages (#61),
-> Windows installer (#62).
+> **Also planned:** Linux distro packages (#61), Windows installer (#62).
 
 ## Quick Start
 

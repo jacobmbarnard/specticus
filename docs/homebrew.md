@@ -26,7 +26,8 @@ specticus --version
 - Access to the GitHub repository (required while the repo is private)
 
 There is **no bottle** yet. Install compiles on the machine (can take several
-minutes). Prebuilt binaries / bottles are tracked separately (#120).
+minutes). Prebuilt downloadable archives (no local compile) are documented in
+[docs/binaries.md](binaries.md) (#120). Bottles are still optional later.
 
 ### Resource bundle (required for `init`)
 
@@ -106,7 +107,8 @@ brew uninstall specticus
 | Work | Ticket / doc |
 |------|----------------|
 | This formula + README brew path | #119 |
-| Prebuilt GitHub Release binaries / bottles | #120 (later) |
+| Prebuilt GitHub Release binaries | #120 / [docs/binaries.md](binaries.md) |
+| Homebrew bottles from release assets | Optional follow-up to #120 |
 | Linux packages | #61 |
 | Windows | #62 |
 | SemVer, tags, changelog | #52 / `docs/release-process.md` |
