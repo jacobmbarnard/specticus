@@ -15,6 +15,8 @@ as described in [docs/release-process.md](docs/release-process.md).
 
 ### Added
 
+- Prebuilt GitHub Release binaries for macOS arm64 and Linux (x86_64, arm64),
+  packaged with SPM resources; release workflow + install docs (#120)
 - `specticus open` subcommand to launch built HTML in the default browser (#122)
 - Maintainer-driven contribution guide (`CONTRIBUTING.md`)
 - Security policy and private vulnerability reporting guidance (`SECURITY.md`)

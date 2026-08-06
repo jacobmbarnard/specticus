@@ -61,7 +61,8 @@ class Specticus < Formula
       The CLI and its resource bundle live under libexec; `specticus` in PATH
       is a thin wrapper so Bundle.module (init templates) resolves correctly.
 
-      Prebuilt GitHub Release binaries are deferred (see project issue #120).
+      Prebuilt GitHub Release archives (no local Swift compile) are documented
+      in docs/binaries.md when you prefer a download over a source build.
     EOS
   end
 
