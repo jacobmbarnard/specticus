@@ -10,6 +10,8 @@ as described in [docs/release-process.md](docs/release-process.md).
 
 ### Fixed
 
+- Linux prebuilt archives link the Swift standard library statically so the
+  binary runs without `libswiftCore.so` / a Swift toolchain on the machine
 - Homebrew (and manual) installs ship the SPM resource bundle with the binary so
   `specticus init` can load embedded Skeleton templates (`Bundle.module`)
 
