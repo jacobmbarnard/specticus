@@ -8,35 +8,54 @@ as described in [docs/release-process.md](docs/release-process.md).
 
 ## [Unreleased]
 
-### Fixed
-
-- Linux prebuilt archives link the Swift standard library statically so the
-  binary runs without `libswiftCore.so` / a Swift toolchain on the machine
-- Homebrew (and manual) installs ship the SPM resource bundle with the binary so
-  `specticus init` can load embedded Skeleton templates (`Bundle.module`)
-
 ### Added
-
-- Prebuilt GitHub Release binaries for macOS arm64 and Linux (x86_64, arm64),
-  packaged with SPM resources; release workflow + install docs (#120)
-- `specticus open` subcommand to launch built HTML in the default browser (#122)
-- Maintainer-driven contribution guide (`CONTRIBUTING.md`)
-- Security policy and private vulnerability reporting guidance (`SECURITY.md`)
-- Release process, versioning, and changelog policy (`docs/release-process.md`)
-- Simple project code of conduct (`CODE_OF_CONDUCT.md`)
-- Homebrew formula (`Formula/specticus.rb`) and install docs (`docs/homebrew.md`)
 
 ### Changed
 
-- README contributing section aligned with maintainer-driven posture; security
-  and code of conduct pointers added
-- README installation prefers Homebrew on macOS; source build is secondary
+### Fixed
+
+## [0.1.0] - 2026-08-06
+
+First tagged public release of specticus (Path A foundation): Markdown specs as
+code, stable traceability IDs, HTML output, and install paths for macOS and Linux.
+
+### Added
+
+- CLI: `init`, `build`, `open`, `lint`, `clean`, and `ids` (assign, status,
+  accept-drift, prune-orphans) for Git-native specifications
+- Stable human-readable traceability IDs (`BR1`, `TS2`, …) with drift detection,
+  lifecycle tooling, and workflow docs (`docs/traceability-ids.md`)
+- Hierarchical heading numbering, TOC, structured HTML assets, build stamps
+- Homebrew formula and tap install path for macOS (`Formula/specticus.rb`,
+  `docs/homebrew.md`) (#119)
+- Prebuilt GitHub Release binaries for **macOS arm64** and **Linux** (x86_64,
+  arm64), with packaging script and release workflow (#120)
+- `specticus open` to launch built HTML in the default browser (#122)
+- Release process, versioning, and changelog policy (`docs/release-process.md`)
+  (#52)
+- Maintainer-driven contribution guide (`CONTRIBUTING.md`)
+- Security policy and private vulnerability reporting (`SECURITY.md`)
+- Code of conduct (`CODE_OF_CONDUCT.md`)
+- Apache 2.0 license
+
+### Fixed
+
+- Homebrew and manual installs ship the SPM resource bundle with the binary so
+  `specticus init` can load embedded Skeleton templates (`Bundle.module`)
+- Linux prebuilt archives link the Swift standard library statically so the
+  binary runs without `libswiftCore.so` / a local Swift toolchain
+
+### Changed
+
+- README installation prefers Homebrew on macOS; prebuilt binaries and source
+  build are documented alternatives
+- README contributing section aligned with maintainer-driven posture
 
 <!--
 When cutting a release:
-1. Rename this section to ## [X.Y.Z] - YYYY-MM-DD
+1. Rename [Unreleased] notes into ## [X.Y.Z] - YYYY-MM-DD
 2. Set Sources/specticus/specticus.swift version to "X.Y.Z"
 3. Tag vX.Y.Z and create a GitHub Release
-4. Add a new empty ## [Unreleased] section above
+4. Keep an empty ## [Unreleased] section above
 See docs/release-process.md.
 -->

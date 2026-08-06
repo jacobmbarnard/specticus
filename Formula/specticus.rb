@@ -2,7 +2,8 @@
 #
 # Install (from this repository used as a tap):
 #   brew tap jacobmbarnard/specticus https://github.com/jacobmbarnard/specticus
-#   brew install --HEAD specticus
+#   brew install specticus
+#   brew install --HEAD specticus   # unreleased develop
 #
 # See docs/homebrew.md for maintainer notes (stable tags, sha/revision bumps).
 
@@ -11,15 +12,11 @@ class Specticus < Formula
   homepage "https://github.com/jacobmbarnard/specticus"
   license "Apache-2.0"
 
-  # Until the first annotated release tag exists, install from develop (HEAD).
-  # After tagging vX.Y.Z, add a stable git url + revision (see docs/homebrew.md)
-  # and keep head for unreleased work:
-  #
-  #   url "https://github.com/jacobmbarnard/specticus.git",
-  #       tag:      "v0.1.0",
-  #       revision: "REPLACE_WITH_FULL_COMMIT_SHA"
-  #   version "0.1.0"
-  #
+  url "https://github.com/jacobmbarnard/specticus.git",
+      tag:      "v0.1.0",
+      revision: "07f233141d53cd95b374d687b39bac7b00263945"
+  version "0.1.0"
+
   head "https://github.com/jacobmbarnard/specticus.git", branch: "develop"
 
   depends_on xcode: :build

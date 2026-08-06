@@ -20,37 +20,57 @@ Writing specifications in Markdown keeps them close to the code and under versio
 
 **Using IDs for the first time?** Read **[Traceability IDs: recommended workflow and common pitfalls](docs/traceability-ids.md)** — syntax, when to assign vs lint vs build, drift, orphans, team patterns, and recovery recipes (#41).
 
+## Happy path
+
+```bash
+# macOS (Homebrew) — or use a GitHub Release binary (below)
+brew tap jacobmbarnard/specticus https://github.com/jacobmbarnard/specticus
+brew install specticus
+
+specticus init MySpecs
+cd MySpecs
+# edit Markdown… then:
+specticus ids assign --dry-run
+specticus build
+specticus open
+```
+
+**Pre-1.0:** the public CLI surface may still change in minor releases. specticus
+is **maintainer-driven** (see [CONTRIBUTING.md](CONTRIBUTING.md)). It is a
+lightweight **specs-as-code** tool — not a DOORS/Jama-class requirements platform.
+
 ## Installation
 
 ### macOS (Homebrew) — preferred
 
 ```bash
 brew tap jacobmbarnard/specticus https://github.com/jacobmbarnard/specticus
-brew install --HEAD specticus
+brew install specticus
 ```
 
 This **builds from source** with Swift Package Manager (no bottle yet). You need
 Homebrew plus **Xcode / Swift 6.2+**. The first install may take several minutes
-while dependencies compile.
+while dependencies compile. For unreleased `develop`, use `brew install --HEAD specticus`.
 
 ```bash
-specticus --version
+specticus --version   # 0.1.0 on the v0.1.0 release
 ```
 
-Maintainer notes (stable tags, formula bumps): **[docs/homebrew.md](docs/homebrew.md)**.
+Maintainer notes: **[docs/homebrew.md](docs/homebrew.md)**.
 
 ### Prebuilt binaries (GitHub Releases)
 
-Tagged releases attach archives for **macOS arm64**, **Linux x86_64**, and
-**Linux arm64** (no Swift toolchain required). See
-**[docs/binaries.md](docs/binaries.md)** for the arch matrix, checksums, and
-macOS Gatekeeper notes.
+[GitHub Releases](https://github.com/jacobmbarnard/specticus/releases) attach
+archives for **macOS arm64**, **Linux x86_64**, and **Linux arm64** (no Swift
+toolchain required). See **[docs/binaries.md](docs/binaries.md)** for the arch
+matrix, checksums, and **macOS Gatekeeper** notes (unsigned builds may need
+`xattr -dr com.apple.quarantine` once).
 
 ```bash
 # Example — pick the asset matching your OS/arch from the release page:
-tar -xzf specticus-*-linux-x86_64.tar.gz
+tar -xzf specticus-0.1.0-linux-x86_64.tar.gz
 mkdir -p "$HOME/.local"
-cp -R specticus-*-linux-x86_64/bin specticus-*-linux-x86_64/libexec "$HOME/.local/"
+cp -R specticus-0.1.0-linux-x86_64/bin specticus-0.1.0-linux-x86_64/libexec "$HOME/.local/"
 export PATH="$HOME/.local/bin:$PATH"
 specticus --version
 ```
@@ -211,7 +231,8 @@ open public issues for exploitable security problems.
 
 ## Versioning and releases
 
-specticus uses Semantic Versioning. See **[CHANGELOG.md](CHANGELOG.md)** for
+specticus uses Semantic Versioning. Current release: **0.1.0** (`v0.1.0`).
+See **[CHANGELOG.md](CHANGELOG.md)** for
 user-facing history and **[docs/release-process.md](docs/release-process.md)** for
 how versions, tags, and GitHub Releases are cut. The CLI reports its version via
 `specticus --version` (currently aligned with development as **0.1.0** until the

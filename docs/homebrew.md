@@ -8,7 +8,8 @@ The **specticus GitHub repository itself** is the first-party tap (no separate
 
 ```bash
 brew tap jacobmbarnard/specticus https://github.com/jacobmbarnard/specticus
-brew install --HEAD specticus   # until a stable tag is in the formula
+brew install specticus          # stable (tagged) formula when present
+# brew install --HEAD specticus # unreleased develop
 ```
 
 Then:
@@ -40,8 +41,8 @@ binary (`Bundle.module`). The formula installs the binary **and** that bundle in
 Fatal error: could not load resource bundle: …/specticus_specticus.bundle
 ```
 
-Reinstall after formula updates with `brew reinstall --HEAD specticus` (or upgrade
-once a stable version exists).
+Reinstall after formula updates with `brew upgrade specticus` or
+`brew reinstall specticus` (`--HEAD` only if you intentionally track develop).
 
 ### Optional: formula from a local checkout
 
