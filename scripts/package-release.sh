@@ -56,11 +56,24 @@ echo "    version=${VERSION}  platform=${PLATFORM_ID}"
 rm -rf "${STAGE}"
 mkdir -p "${STAGE}/bin" "${STAGE}/libexec" "${DIST}"
 
-echo "==> swift build -c release"
-swift build \
-  --disable-sandbox \
-  --configuration release \
+# Linux: default SPM builds dynamically link libswiftCore.so etc. from the
+# toolchain. Users without Swift installed then fail with:
+#   error while loading shared libraries: libswiftCore.so
+# --static-swift-stdlib embeds the Swift runtime so only common system libs
+# (glibc, libstdc++, libm, libgcc) are needed. macOS ships differently; leave default.
+BUILD_ARGS=(
+  --disable-sandbox
+  --configuration release
   --product specticus
+)
+if [[ "${PLATFORM_ID}" == linux-* ]]; then
+  BUILD_ARGS+=(--static-swift-stdlib)
+  echo "==> swift build -c release --static-swift-stdlib (Linux portable binary)"
+else
+  echo "==> swift build -c release"
+fi
+
+swift build "${BUILD_ARGS[@]}"
 
 RELEASE_DIR="${ROOT}/.build/release"
 if [[ ! -x "${RELEASE_DIR}/specticus" ]]; then
@@ -70,6 +83,17 @@ fi
 if [[ ! -x "${RELEASE_DIR}/specticus" ]]; then
   echo "error: release binary not found under ${RELEASE_DIR}" >&2
   exit 1
+fi
+
+# Guardrail: refuse to ship a Linux binary that still needs the Swift toolchain.
+if [[ "${PLATFORM_ID}" == linux-* ]] && command -v ldd >/dev/null 2>&1; then
+  if ldd "${RELEASE_DIR}/specticus" 2>/dev/null | grep -E 'libswift|libFoundation|libdispatch' >/dev/null; then
+    echo "error: Linux binary still dynamically links Swift runtime libraries:" >&2
+    ldd "${RELEASE_DIR}/specticus" 2>/dev/null | grep -E 'libswift|libFoundation|libdispatch' >&2 || true
+    echo "       Expected --static-swift-stdlib to eliminate these." >&2
+    exit 1
+  fi
+  echo "    Linux dynamic deps: no libswift* (static stdlib OK)"
 fi
 
 echo "==> Staging binary and SPM resources from ${RELEASE_DIR}"
@@ -122,6 +146,12 @@ Quick install (user-local)
 System-wide (optional)
 ----------------------
   sudo cp -R ${NAME}/bin ${NAME}/libexec /usr/local/
+
+Linux notes
+-----------
+  The binary is linked with --static-swift-stdlib (no full Swift install needed).
+  You still need a normal glibc system (Ubuntu/Debian-class). Alpine/musl is not
+  supported by these archives.
 
 macOS notes
 -----------

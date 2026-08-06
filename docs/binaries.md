@@ -11,8 +11,20 @@ Swift. Binaries are for users who want a downloadable build without compiling.
 | Archive suffix | Runner / toolchain | Notes |
 |----------------|--------------------|--------|
 | `macos-arm64` | `macos-15` + Xcode (Swift 6.2+) | Apple Silicon (**required** on tag) |
-| `linux-x86_64` | `ubuntu-24.04` + `swift:6.2` container | glibc (**required** on tag) |
-| `linux-arm64` | `ubuntu-24.04-arm` + `swift:6.2` container | glibc (**best-effort**; release still publishes if this job is unavailable) |
+| `linux-x86_64` | `ubuntu-24.04` + `swift:6.2` container | glibc (**required** on tag); **static Swift stdlib** |
+| `linux-arm64` | `ubuntu-24.04-arm` + `swift:6.2` container | glibc (**best-effort**); static Swift stdlib |
+
+### Runtime requirements
+
+| Platform | Needs Swift toolchain at runtime? | Needs |
+|----------|-------------------------------------|--------|
+| **macOS** | No (binary is self-contained enough for CLI use) | macOS on matching arch; Gatekeeper may quarantine downloads |
+| **Linux** | **No** — packages use `swift build --static-swift-stdlib` | **glibc** + usual `libstdc++` / `libgcc` (Ubuntu 24.04-class). **Not** Alpine/musl |
+
+If you see `error while loading shared libraries: libswiftCore.so`, the archive was
+built **without** static stdlib (old package) or you are not using the release
+tarball layout. Rebuild with current `scripts/package-release.sh` or re-download
+a newer artifact.
 
 Not automated yet (use source / Homebrew / local `scripts/package-release.sh`):
 
