@@ -232,11 +232,10 @@ open public issues for exploitable security problems.
 ## Versioning and releases
 
 specticus uses Semantic Versioning. Current release: **0.1.0** (`v0.1.0`).
-See **[CHANGELOG.md](CHANGELOG.md)** for
-user-facing history and **[docs/release-process.md](docs/release-process.md)** for
-how versions, tags, and GitHub Releases are cut. The CLI reports its version via
-`specticus --version` (currently aligned with development as **0.1.0** until the
-first tagged release freezes a changelog section).
+See **[CHANGELOG.md](CHANGELOG.md)** for user-facing history and
+**[docs/release-process.md](docs/release-process.md)** for how versions, tags, and
+GitHub Releases are cut. The CLI reports its version via `specticus --version`
+(should match the installed release; **0.1.0** for the first public tag).
 
 ## License
 
