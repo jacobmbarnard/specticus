@@ -72,7 +72,7 @@ tar -xzf specticus-0.1.0-linux-x86_64.tar.gz
 mkdir -p "$HOME/.local"
 cp -R specticus-0.1.0-linux-x86_64/bin specticus-0.1.0-linux-x86_64/libexec "$HOME/.local/"
 export PATH="$HOME/.local/bin:$PATH"
-specticus --version
+scs --version
 ```
 
 ### From source
@@ -100,32 +100,32 @@ with a “could not load resource bundle” fatal error.
 
 ```bash
 # Create a new documentation project
-specticus init MySpecs
+scs init MySpecs
 
 cd MySpecs
 
 # Build HTML documentation
-specticus build
+scs build
 
 # Open the built HTML in your default browser
-specticus open
+scs open
 
 # Check for issues
-specticus lint
+scs lint
 
 # Manage traceability IDs (preview first — assign rewrites Markdown in place)
-specticus ids assign --dry-run
-specticus ids assign --dry-run --diff
-specticus ids assign --yes
+scs ids assign --dry-run
+scs ids assign --dry-run --diff
+scs ids assign --yes
 
 # Inspect store vs Markdown (orphans, drift, recovery hints)
-specticus ids status
+scs ids status
 
 # After review: rebind one drifted ID to its new heading text (same ID)
-specticus ids accept-drift BR1
+scs ids accept-drift BR1
 
 # After review: drop orphan bindings for deleted headings (numbers stay reserved)
-specticus ids prune-orphans
+scs ids prune-orphans
 ```
 
 ### `ids.auto_assign` and build safety
@@ -135,7 +135,7 @@ specticus ids prune-orphans
 To mutate sources as part of a build you must pass an **explicit** flag:
 
 ```bash
-specticus build --assign-ids   # ⚠️ rewrites Markdown in place
+scs build --assign-ids   # ⚠️ rewrites Markdown in place
 ```
 
 Avoid `--assign-ids` in CI or shared checkouts unless that is intentional. Prefer the dedicated `ids assign` workflow above. Default config leaves `auto_assign: false` so build stays purely generative (HTML/assets only).
@@ -156,7 +156,7 @@ Avoid `--assign-ids` in CI or shared checkouts unless that is intentional. Prefe
 | `ids prune-orphans`  | Remove orphan bindings (counters never decrease)                 |
 | `ids`                | Manage traceability IDs (group command)                          |
 
-Run `specticus --help` or `specticus <command> --help` for details.
+Run `scs --help` or `scs <command> --help` for details.
 
 ## How It Works
 
@@ -206,10 +206,10 @@ specticus is **SCM-agnostic by design**: it never calls Git, Fossil, SVN, or any
 
 ```bash
 # After integrating teammates' doc changes:
-specticus lint                 # fails on duplicate IDs
-specticus ids status           # lifecycle + collaboration snapshot
-specticus ids assign --dry-run
-specticus ids assign --yes     # only when clean
+scs lint                 # fails on duplicate IDs
+scs ids status           # lifecycle + collaboration snapshot
+scs ids assign --dry-run
+scs ids assign --yes     # only when clean
 ```
 
 Optional: if git is present, `ids assign` may print a soft dirty-path hint for files it is about to rewrite. That hint is convenience-only and can be skipped with `--skip-git-check`. Collaboration guarantees come from ID uniqueness and store coherence, not from any SCM.
