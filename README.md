@@ -27,12 +27,12 @@ Writing specifications in Markdown keeps them close to the code and under versio
 brew tap jacobmbarnard/specticus https://github.com/jacobmbarnard/specticus
 brew install specticus
 
-specticus init MySpecs
+scs init MySpecs
 cd MySpecs
 # edit Markdown… then:
-specticus ids assign --dry-run
-specticus build
-specticus open
+scs ids assign --dry-run
+scs build
+scs open
 ```
 
 **Pre-1.0:** the public CLI surface may still change in minor releases. specticus
@@ -53,7 +53,7 @@ Homebrew plus **Xcode / Swift 6.2+**. The first install may take several minutes
 while dependencies compile. For unreleased `develop`, use `brew install --HEAD specticus`.
 
 ```bash
-specticus --version   # 0.1.0 on the v0.1.0 release
+scs --version   # 0.1.0 on the v0.1.0 release
 ```
 
 Maintainer notes: **[docs/homebrew.md](docs/homebrew.md)**.
