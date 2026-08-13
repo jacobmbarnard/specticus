@@ -12,15 +12,15 @@ enum Brand {
     /// CLI / SemVer version string (`scs --version`, formula, tags).
     static let version = "0.2.0"
 
-    /// Locked design from #135 — trailing spaces trimmed.
-    static let wordmark: String = """
-                          _   _
-      ___ _ __   ___  ___| |_(_) ___ _   _ ___
-     / __| '_ \\ / _ \\/ __| __| |/ __| | | / __|
-     \\__ \\ |_) |  __/ (__| |_| | (__| |_| \\__ \\
-     |___/ .__/ \\___|\\___|\\__|_|\\___|\\__,_|___/
-         |_|
-    """
+    /// Locked design from #135 (user-approved art; trailing spaces stripped).
+    static let wordmark: String = [
+        #"                      _   _"#,
+        #"  ___ _ __   ___  ___| |_(_) ___ _   _ ___"#,
+        #" / __| '_ \ / _ \/ __| __| |/ __| | | / __|"#,
+        #" \__ \ |_) |  __/ (__| |_| | (__| |_| \__ \"#,
+        #" |___/ .__/ \___|\___|\__|_|\___|\__,_|___/"#,
+        #"     |_|"#,
+    ].joined(separator: "\n")
 
     /// True when stdout is an interactive terminal.
     static var isSTDOUTTY: Bool {
