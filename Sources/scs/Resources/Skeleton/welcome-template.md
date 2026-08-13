@@ -2,13 +2,13 @@
 
 > Specifications as code.
 
-This project was initialized with `specticus init`.
+This project was initialized with `scs init`.
 
 ## Overview
 
 This is a starter Software Requirements Specification (SRS) project.
 
-The documentation is assembled from the numbered Markdown files (`00N-*.md`) in lexicographic order (see `specticus build` after #3).
+The documentation is assembled from the numbered Markdown files (`00N-*.md`) in lexicographic order (see `scs build` after #3).
 
 Key sections include:
 - Document metadata
@@ -24,9 +24,9 @@ Key sections include:
 
 1. Edit `title.yml`
 2. Fill out the numbered `.md` files and add your Mermaid diagrams
-3. Run `specticus build`
-4. Run `specticus lint` to validate structure
-5. (Optional) `specticus ids assign` to add traceability IDs
+3. Run `scs build`
+4. Run `scs lint` to validate structure
+5. (Optional) `scs ids assign` to add traceability IDs
 
 See the full list of starter templates and SRSGem inspiration in the project README.
 

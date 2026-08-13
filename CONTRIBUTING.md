@@ -83,9 +83,9 @@ Prefer green local results before opening a PR.
 **Run the CLI from a debug build**
 
 ```bash
-swift run specticus --help
+swift run scs --help
 # or, after build:
-.build/debug/specticus --help
+.build/debug/scs --help
 ```
 
 ### Coding conventions

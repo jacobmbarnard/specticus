@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import specticus
+@testable import scs
 
 @Test func example() async throws {
     // Write your test here and use APIs like `#expect(...)` to check expected conditions.
@@ -2934,7 +2934,7 @@ private func makeLifecycleFixture(
         Issue.record("Expected error for missing HTML")
     } catch {
         let message = String(describing: error)
-        #expect(message.contains("specticus build") || message.contains("not found"))
+        #expect(message.contains("scs build") || message.contains("not found"))
     }
 }
 

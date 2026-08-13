@@ -6,7 +6,7 @@ import ArgumentParser
 struct Lint: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Validate the project structure, required files, and external tools.",
-        discussion: "Checks for a valid specticus project layout (from `specticus init`), key files, `.specticus/config.yml`, and build readiness. See issues #10 and #7."
+        discussion: "Checks for a valid specticus project layout (from `scs init`), key files, `.specticus/config.yml`, and build readiness. See issues #10 and #7."
     )
 
     func run() throws {
@@ -14,7 +14,7 @@ struct Lint: ParsableCommand {
         let cwd = fm.currentDirectoryPath
         let project = try SpecticusProject.load(from: cwd)
 
-        print("🔍 Running specticus lint...\n")
+        print("🔍 Running scs lint...\n")
 
         var passed = 0
         var warnings = 0
@@ -51,7 +51,7 @@ struct Lint: ParsableCommand {
             ok("Detected specticus project (or partial/legacy project)")
         } else {
             warn("No clear specticus project markers found in this directory.",
-                 suggestion: "Run `specticus init` to scaffold a new project, or `cd` into an existing one.")
+                 suggestion: "Run `scs init` to scaffold a new project, or `cd` into an existing one.")
         }
 
         // --- Core config & metadata (#7)
@@ -67,7 +67,7 @@ struct Lint: ParsableCommand {
             }
         } else {
             warn(".specticus/ directory not found (config lives here in modern projects)",
-                 suggestion: "Run `specticus init` (or `specticus init --force`) to create it.")
+                 suggestion: "Run `scs init` (or `scs init --force`) to create it.")
         }
 
         for w in project.warnings {
@@ -100,12 +100,12 @@ struct Lint: ParsableCommand {
             ok("Found \(numberedCount) numbered section file(s) (00N-*.md)")
         } else if hasWelcome {
             warn("Only legacy welcome-template.md found (no 00N-*.md sections)",
-                 suggestion: "Consider migrating to the modern numbered section layout from `specticus init`.")
+                 suggestion: "Consider migrating to the modern numbered section layout from `scs init`.")
         } else if !mdFiles.isEmpty {
             warn("Markdown files present but none follow the recommended 00N-*.md naming",
                  suggestion: "Rename or add numbered sections for reliable lex-order assembly.")
         } else {
-            fail("No Markdown content files found", suggestion: "Add at least one .md file or run `specticus init`.")
+            fail("No Markdown content files found", suggestion: "Add at least one .md file or run `scs init`.")
         }
 
         // --- Diagrams (config diagrams_dir)
@@ -147,7 +147,7 @@ struct Lint: ParsableCommand {
                 }
             } else {
                 warn("\(base)/ directory missing",
-                     suggestion: "Run `specticus init` to scaffold ADRs/ + BDRs/ with examples.")
+                     suggestion: "Run `scs init` to scaffold ADRs/ + BDRs/ with examples.")
             }
         }
 
@@ -168,7 +168,7 @@ struct Lint: ParsableCommand {
         if project.config.ids.autoAssign {
             warn(
                 "ids.auto_assign is true — build will REPORT pending ID assignments (dry-run only)",
-                suggestion: "Sources are not rewritten unless you pass `specticus build --assign-ids` (#38). Prefer `specticus ids assign --dry-run` then `--yes`. Never enable --assign-ids in shared CI unless intentional."
+                suggestion: "Sources are not rewritten unless you pass `scs build --assign-ids` (#38). Prefer `scs ids assign --dry-run` then `--yes`. Never enable --assign-ids in shared CI unless intentional."
             )
         } else {
             ok("ids.auto_assign is false (build will not run ID assign; safe default — #38)")
@@ -220,7 +220,7 @@ struct Lint: ParsableCommand {
             )
             if !drifts.isEmpty {
                 warn("\(drifts.count) ID(s) with content drift (mode=\(sensitivity.rawValue))",
-                     suggestion: "Review old vs new text below; revert the heading, or run `specticus ids accept-drift <ID>` for same-identity rewording (#66).")
+                     suggestion: "Review old vs new text below; revert the heading, or run `scs ids accept-drift <ID>` for same-identity rewording (#66).")
                 for d in drifts.prefix(8) {
                     print("      \(d.id):")
                     print("        was: \(d.oldContent)")
@@ -239,14 +239,14 @@ struct Lint: ParsableCommand {
             let storeExists = FileManager.default.fileExists(atPath: project.idsURL.path)
             if !storeExists && !liveIDs.isEmpty {
                 warn("ids.json is missing while Markdown claims \(liveIDs.count) ID(s)",
-                     suggestion: "Run `specticus ids assign` to bootstrap the store from Markdown (#37 recovery).")
+                     suggestion: "Run `scs ids assign` to bootstrap the store from Markdown (#37 recovery).")
             } else if orphans.isEmpty {
                 if storeExists || !store.bindings.isEmpty {
                     ok("No orphan ID bindings in ids.json")
                 }
             } else {
                 warn("\(orphans.count) orphan ID binding(s) in ids.json (not claimed in Markdown)",
-                     suggestion: "Orphans reserve numbers by design (#33). Leave for history, inspect with `specticus ids status`, or after review `specticus ids prune-orphans` (#37).")
+                     suggestion: "Orphans reserve numbers by design (#33). Leave for history, inspect with `scs ids status`, or after review `scs ids prune-orphans` (#37).")
                 for o in orphans.prefix(8) {
                     print("      \(o.id): \(o.content)")
                 }
@@ -280,7 +280,7 @@ struct Lint: ParsableCommand {
         } else if warnings > 0 {
             print("\nProject is mostly ready — address warnings for best results.")
         } else {
-            print("\n✅ Everything looks good! Try: specticus build")
+            print("\n✅ Everything looks good! Try: scs build")
         }
     }
 }

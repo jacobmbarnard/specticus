@@ -13,9 +13,9 @@
 #   specticus-<version>-<platform-arch>.tar.gz.sha256
 #
 # Layout inside the archive (matches the Homebrew libexec model):
-#   bin/specticus              # thin wrapper
-#   libexec/specticus          # real binary
-#   libexec/specticus_*.bundle # or *.resources (Bundle.module)
+#   bin/scs              # thin wrapper
+#   libexec/scs          # real binary
+#   libexec/scs_*.bundle # or *.resources (Bundle.module)
 
 set -euo pipefail
 
@@ -37,11 +37,17 @@ fi
 # Prefer explicit VERSION; else parse CLI version string from source.
 if [[ -z "${VERSION:-}" ]]; then
   VERSION="$(
-    sed -n 's/.*version: "\([^"]*\)".*/\1/p' Sources/specticus/specticus.swift | head -1
+    # Prefer scs.swift; fall back to legacy specticus.swift filename
+    for f in Sources/scs/scs.swift Sources/scs/specticus.swift; do
+      if [[ -f "$f" ]]; then
+        sed -n 's/.*version: "\([^"]*\)".*/\1/p' "$f" | head -1
+        break
+      fi
+    done
   )"
 fi
 if [[ -z "${VERSION}" ]]; then
-  echo "error: could not determine VERSION (set VERSION= or check specticus.swift)" >&2
+  echo "error: could not determine VERSION (set VERSION= or check Sources/scs/* for version string)" >&2
   exit 1
 fi
 
@@ -64,7 +70,7 @@ mkdir -p "${STAGE}/bin" "${STAGE}/libexec" "${DIST}"
 BUILD_ARGS=(
   --disable-sandbox
   --configuration release
-  --product specticus
+  --product scs
 )
 if [[ "${PLATFORM_ID}" == linux-* ]]; then
   BUILD_ARGS+=(--static-swift-stdlib)
@@ -76,20 +82,20 @@ fi
 swift build "${BUILD_ARGS[@]}"
 
 RELEASE_DIR="${ROOT}/.build/release"
-if [[ ! -x "${RELEASE_DIR}/specticus" ]]; then
+if [[ ! -x "${RELEASE_DIR}/scs" ]]; then
   # Some toolchains use a triple subdirectory; resolve via swift build --show-bin-path
   RELEASE_DIR="$(swift build --configuration release --show-bin-path)"
 fi
-if [[ ! -x "${RELEASE_DIR}/specticus" ]]; then
-  echo "error: release binary not found under ${RELEASE_DIR}" >&2
+if [[ ! -x "${RELEASE_DIR}/scs" ]]; then
+  echo "error: release binary not found under ${RELEASE_DIR}/scs" >&2
   exit 1
 fi
 
 # Guardrail: refuse to ship a Linux binary that still needs the Swift toolchain.
 if [[ "${PLATFORM_ID}" == linux-* ]] && command -v ldd >/dev/null 2>&1; then
-  if ldd "${RELEASE_DIR}/specticus" 2>/dev/null | grep -E 'libswift|libFoundation|libdispatch' >/dev/null; then
+  if ldd "${RELEASE_DIR}/scs" 2>/dev/null | grep -E 'libswift|libFoundation|libdispatch' >/dev/null; then
     echo "error: Linux binary still dynamically links Swift runtime libraries:" >&2
-    ldd "${RELEASE_DIR}/specticus" 2>/dev/null | grep -E 'libswift|libFoundation|libdispatch' >&2 || true
+    ldd "${RELEASE_DIR}/scs" 2>/dev/null | grep -E 'libswift|libFoundation|libdispatch' >&2 || true
     echo "       Expected --static-swift-stdlib to eliminate these." >&2
     exit 1
   fi
@@ -97,19 +103,19 @@ if [[ "${PLATFORM_ID}" == linux-* ]] && command -v ldd >/dev/null 2>&1; then
 fi
 
 echo "==> Staging binary and SPM resources from ${RELEASE_DIR}"
-cp "${RELEASE_DIR}/specticus" "${STAGE}/libexec/specticus"
-chmod +x "${STAGE}/libexec/specticus"
+cp "${RELEASE_DIR}/scs" "${STAGE}/libexec/scs"
+chmod +x "${STAGE}/libexec/scs"
 
 shopt -s nullglob
 resource_artifacts=(
-  "${RELEASE_DIR}"/specticus_*.bundle
-  "${RELEASE_DIR}"/specticus_*.resources
+  "${RELEASE_DIR}"/scs_*.bundle
+  "${RELEASE_DIR}"/scs_*.resources
 )
 shopt -u nullglob
 
 if [[ ${#resource_artifacts[@]} -eq 0 ]]; then
-  echo "error: no SPM resource bundle/dir found (specticus_*.bundle or *.resources)" >&2
-  echo "       Bundle.module is required for 'specticus init'." >&2
+  echo "error: no SPM resource bundle/dir found (scs_*.bundle or *.resources)" >&2
+  echo "       Bundle.module is required for 'scs init'." >&2
   exit 1
 fi
 
@@ -119,20 +125,20 @@ for artifact in "${resource_artifacts[@]}"; do
 done
 
 # Relative wrapper so the archive is relocatable.
-cat > "${STAGE}/bin/specticus" << 'EOF'
+cat > "${STAGE}/bin/scs" << 'EOF'
 #!/bin/sh
-# specticus — relocatable launcher (binary + Bundle.module live in ../libexec)
+# scs (specticus) — relocatable launcher (binary + Bundle.module live in ../libexec)
 ROOT="$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)"
-exec "$ROOT/libexec/specticus" "$@"
+exec "$ROOT/libexec/scs" "$@"
 EOF
-chmod +x "${STAGE}/bin/specticus"
+chmod +x "${STAGE}/bin/scs"
 
 cat > "${STAGE}/INSTALL.txt" << EOF
 specticus ${VERSION} (${PLATFORM_ID})
 ==============================
 
 This archive contains a prebuilt specticus CLI and the SPM resource bundle
-required for \`specticus init\`.
+required for \`scs init\`.
 
 Quick install (user-local)
 --------------------------
@@ -140,8 +146,8 @@ Quick install (user-local)
   mkdir -p "\$HOME/.local"
   cp -R ${NAME}/bin ${NAME}/libexec "\$HOME/.local/"
   export PATH="\$HOME/.local/bin:\$PATH"   # add to your shell profile
-  specticus --version
-  specticus init MySpecs
+  scs --version
+  scs init MySpecs
 
 System-wide (optional)
 ----------------------
@@ -165,9 +171,9 @@ See https://github.com/jacobmbarnard/specticus/blob/develop/docs/binaries.md
 EOF
 
 echo "==> Smoke test"
-"${STAGE}/bin/specticus" --version
+"${STAGE}/bin/scs" --version
 SMOKE="$(mktemp -d "${TMPDIR:-/tmp}/specticus-pkg.XXXXXX")"
-"${STAGE}/bin/specticus" init "${SMOKE}/demo"
+"${STAGE}/bin/scs" init "${SMOKE}/demo"
 test -f "${SMOKE}/demo/.specticus/config.yml"
 test -f "${SMOKE}/demo/001-document-metadata.md"
 rm -rf "${SMOKE}"

@@ -3,8 +3,8 @@
 
 import PackageDescription
 
-let package = Package(
-    name: "specticus",
+let package: Package = Package(
+    name: "scs",
     dependencies: [
         .package(url: "https://github.com/JohnSundell/Ink.git", from: "0.6.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
@@ -12,7 +12,7 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "specticus",
+            name: "scs",
             dependencies: [
                 "Ink",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
@@ -23,8 +23,8 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "specticusTests",
-            dependencies: ["specticus"]
+            name: "scsTests",
+            dependencies: ["scs"]
         ),
     ],
     swiftLanguageModes: [.v6]

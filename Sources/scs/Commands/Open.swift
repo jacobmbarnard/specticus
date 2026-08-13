@@ -12,7 +12,7 @@ struct Open: ParsableCommand {
         --output when provided, else build.output from `.specticus/config.yml`, \
         else the default `output/index.html`. Opens the file with the OS default \
         application (macOS `open`, Linux `xdg-open`). Does not start a local server. \
-        Run `specticus build` first if the file is missing.
+        Run `scs build` first if the file is missing.
         """
     )
 
@@ -66,7 +66,7 @@ enum OpenHTML {
             throw ValidationError(
                 """
                 HTML output not found: \(displayPath)
-                Run `specticus build` first, or pass --output to an existing HTML file.
+                Run `scs build` first, or pass --output to an existing HTML file.
                 """
             )
         }

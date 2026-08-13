@@ -57,7 +57,7 @@ For any released version `X.Y.Z`:
 
 1. **Git tag:** `vX.Y.Z` (leading `v`, no other suffix unless pre-release)
 2. **CLI version:** `Specticus.configuration.version` in
-   `Sources/specticus/specticus.swift` (shown by `specticus --version`)
+   `Sources/scs/scs.swift` (shown by `scs --version`)
 3. **Changelog:** a matching section in [`CHANGELOG.md`](../CHANGELOG.md)
 4. **GitHub Release:** named/tagged `vX.Y.Z` with notes derived from the
    changelog
@@ -155,7 +155,7 @@ artifact steps when binary or package publishing lands (#99, #61, #62).
 - [ ] Choose the next version per the SemVer rules above
 - [ ] Move `[Unreleased]` notes into `[X.Y.Z] - YYYY-MM-DD`
 - [ ] Recreate an empty `[Unreleased]` section
-- [ ] Set CLI `version:` to `"X.Y.Z"` in `Sources/specticus/specticus.swift`
+- [ ] Set CLI `version:` to `"X.Y.Z"` in `Sources/scs/scs.swift`
 - [ ] Open/merge a focused PR (or commit) with **only** release metadata plus
       any last-minute release-critical fixes
 
@@ -176,7 +176,7 @@ extraordinary circumstances (and document why if it ever happens).
 ### 4. GitHub Release
 
 - [ ] Create a **GitHub Release** for tag `vX.Y.Z`
-- [ ] Title: `vX.Y.Z` (or `specticus vX.Y.Z`)
+- [ ] Title: `vX.Y.Z` (or `scs vX.Y.Z`)
 - [ ] Body: paste or summarize the matching `CHANGELOG.md` section
 - [ ] Mark as **pre-release** only when using a pre-release version
 - [ ] Confirm **prebuilt binaries** are attached by the
@@ -187,7 +187,7 @@ extraordinary circumstances (and document why if it ever happens).
 
 ### 5. Post-release
 
-- [ ] Verify `specticus --version` on a release build of that commit prints
+- [ ] Verify `scs --version` on a release build of that commit prints
       `X.Y.Z`
 - [ ] Confirm the GitHub Release page renders correctly
 - [ ] **Homebrew:** bump `Formula/specticus.rb` stable `tag` / `revision` /

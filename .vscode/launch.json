@@ -19,6 +19,26 @@
 			"target": "specticus",
 			"configuration": "release",
 			"preLaunchTask": "swift: Build Release specticus"
+		},
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:specticus}",
+			"name": "Debug scs",
+			"target": "scs",
+			"configuration": "debug",
+			"preLaunchTask": "swift: Build Debug scs"
+		},
+		{
+			"type": "swift",
+			"request": "launch",
+			"args": [],
+			"cwd": "${workspaceFolder:specticus}",
+			"name": "Release scs",
+			"target": "scs",
+			"configuration": "release",
+			"preLaunchTask": "swift: Build Release scs"
 		}
 	]
 }

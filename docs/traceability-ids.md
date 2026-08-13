@@ -2,7 +2,7 @@
 
 This guide is the practical companion to specticus’s ID commands. It covers **syntax**, **when to run which command**, **drift and orphans**, **team patterns**, and **mistakes that waste time**.
 
-For CLI details, also run `specticus ids --help` and `specticus help ids <subcommand>`.
+For CLI details, also run `scs ids --help` and `scs help ids <subcommand>`.
 
 ---
 
@@ -55,7 +55,7 @@ Only a **leading** ID owns the heading:
 
 ### Prefix by section (skeleton)
 
-`specticus init` scaffolds section files. When you leave headings without IDs, `ids assign` infers a prefix from heading wording, filename, or siblings. Typical mapping:
+`scs init` scaffolds section files. When you leave headings without IDs, `ids assign` infers a prefix from heading wording, filename, or siblings. Typical mapping:
 
 | Prefix | Typical use |
 |--------|-------------|
@@ -77,26 +77,26 @@ You can always write the ID yourself (`## TS4: …`) before running assign.
 write / edit Markdown headings
         │
         ▼
-specticus ids assign --dry-run          # optional: --diff
+scs ids assign --dry-run          # optional: --diff
         │
         ▼
-specticus ids assign --yes              # rewrites Markdown + updates ids.json
+scs ids assign --yes              # rewrites Markdown + updates ids.json
         │
         ▼
-specticus lint                          # structure + ID problems
+scs lint                          # structure + ID problems
         │
         ▼
-specticus build                         # HTML only (default)
+scs build                         # HTML only (default)
         │
         ▼
 commit Markdown + .specticus/ids.json together
 ```
 
 1. **Author in plain language** — add or edit H1/H2 headings; IDs optional at first.
-2. **Preview assignment** — `specticus ids assign --dry-run` (add `--diff` to see line-level rewrites).
-3. **Assign** — `specticus ids assign --yes` when the preview looks right. Non-interactive shells require `--yes` to rewrite.
-4. **Lint** — `specticus lint` should pass (duplicates and drift are not “ignore forever” problems).
-5. **Build** — `specticus build` generates HTML. Prefer **not** mutating sources during build.
+2. **Preview assignment** — `scs ids assign --dry-run` (add `--diff` to see line-level rewrites).
+3. **Assign** — `scs ids assign --yes` when the preview looks right. Non-interactive shells require `--yes` to rewrite.
+4. **Lint** — `scs lint` should pass (duplicates and drift are not “ignore forever” problems).
+5. **Build** — `scs build` generates HTML. Prefer **not** mutating sources during build.
 6. **Commit store + sources** — treat `.specticus/ids.json` (and audit log if present) as part of the same change set as the Markdown.
 
 ### Reading `ids assign` skip feedback (#43)
@@ -110,8 +110,8 @@ Every `ids assign` (including `--dry-run`) prints a **heading scan** summary:
 - Near-miss forms (`BR-001`, `br1`, `[BR1]`, zero-padding) are called out instead of silently getting a second ID injected
 
 ```bash
-specticus ids assign --dry-run
-specticus ids assign --dry-run --verbose   # list every eligible heading considered
+scs ids assign --dry-run
+scs ids assign --dry-run --verbose   # list every eligible heading considered
 ```
 
 ### When you only reword an existing requirement
@@ -119,10 +119,10 @@ specticus ids assign --dry-run --verbose   # list every eligible heading conside
 Keep the **same ID**, change the descriptive text, then:
 
 ```bash
-specticus lint                 # reports content drift
-specticus ids status           # see old vs new binding context
-specticus ids accept-drift BR1 --note "editorial rename"
-specticus lint
+scs lint                 # reports content drift
+scs ids status           # see old vs new binding context
+scs ids accept-drift BR1 --note "editorial rename"
+scs lint
 ```
 
 Do **not** invent a new ID for a pure reword of the same requirement. Do **not** reuse an old ID for a *different* requirement — mint a new one with `ids assign` instead.
@@ -132,9 +132,9 @@ Do **not** invent a new ID for a pure reword of the same requirement. Do **not**
 Delete or un-ID the heading. The binding becomes an **orphan** in `ids.json` (number stays reserved). Inspect, then prune after review:
 
 ```bash
-specticus ids status
-specticus ids prune-orphans --dry-run
-specticus ids prune-orphans --id BR2 --note "retired"
+scs ids status
+scs ids prune-orphans --dry-run
+scs ids prune-orphans --id BR2 --note "retired"
 ```
 
 Pruning **never** frees the number for reuse. New IDs always use per-prefix **max + 1** (gaps are intentional).
@@ -177,14 +177,14 @@ ids:
 |----------------|--------|
 | `auto_assign: false` (default) | Build never talks about pending assigns unless you pass `--assign-ids` |
 | `auto_assign: true` | Build **reports** a dry-run of pending assignments only — **does not** rewrite sources |
-| `specticus build --assign-ids` | Explicit opt-in: run assign and **rewrite Markdown** during build |
+| `scs build --assign-ids` | Explicit opt-in: run assign and **rewrite Markdown** during build |
 
 Prefer:
 
 ```bash
-specticus ids assign --dry-run
-specticus ids assign --yes
-specticus build
+scs ids assign --dry-run
+scs ids assign --yes
+scs build
 ```
 
 ---
@@ -209,8 +209,8 @@ Markdown:   ## BR1: User Logout     ← drift
 ### Accepting drift (same identity)
 
 ```bash
-specticus ids accept-drift BR1
-specticus ids accept-drift BR1 --note "renamed under CR-42"
+scs ids accept-drift BR1
+scs ids accept-drift BR1 --note "renamed under CR-42"
 ```
 
 - Updates **only** that ID’s binding in `ids.json`
@@ -244,8 +244,8 @@ Markdown formatting in titles is never “normalized away” into a clean bindin
 | **Counter / high-water** | Per prefix, next ID is always **max + 1**; numbers are **never reused** |
 
 ```bash
-specticus ids status          # full lifecycle snapshot
-specticus ids prune-orphans   # after review only
+scs ids status          # full lifecycle snapshot
+scs ids prune-orphans   # after review only
 ```
 
 Missing `ids.json` is treated as an empty store; `ids assign` can bootstrap bindings from IDs already present in Markdown.
@@ -267,10 +267,10 @@ specticus is **SCM-agnostic**: it does not call Git (or any VCS) for safety. Col
 
 ```bash
 # After integrating teammates' doc changes:
-specticus lint
-specticus ids status
-specticus ids assign --dry-run
-specticus ids assign --yes
+scs lint
+scs ids status
+scs ids assign --dry-run
+scs ids assign --yes
 ```
 
 Optional: if `git` is on `PATH`, `ids assign` may print a soft dirty-path hint for files it is about to rewrite. Silence with `--skip-git-check`. Guarantees still come from uniqueness and store coherence, not from Git.
@@ -298,7 +298,7 @@ Optional: if `git` is on `PATH`, `ids assign` may print a soft dirty-path hint f
 
 ## Config reference (IDs)
 
-From `.specticus/config.yml` (see skeleton after `specticus init`):
+From `.specticus/config.yml` (see skeleton after `scs init`):
 
 ```yaml
 ids:
@@ -318,28 +318,28 @@ Independent of:
 
 ```bash
 # Assign
-specticus ids assign --dry-run
-specticus ids assign --dry-run --diff
-specticus ids assign --dry-run --verbose   # list every eligible heading (#43)
-specticus ids assign --yes
+scs ids assign --dry-run
+scs ids assign --dry-run --diff
+scs ids assign --dry-run --verbose   # list every eligible heading (#43)
+scs ids assign --yes
 
 # Inspect
-specticus ids status
-specticus lint
+scs ids status
+scs lint
 
 # Drift (one ID at a time)
-specticus ids accept-drift BR1
-specticus ids accept-drift BR1 --note "same requirement, clearer title"
+scs ids accept-drift BR1
+scs ids accept-drift BR1 --note "same requirement, clearer title"
 
 # Orphans
-specticus ids prune-orphans --dry-run
-specticus ids prune-orphans
-specticus ids prune-orphans --id BR2 --note "retired"
+scs ids prune-orphans --dry-run
+scs ids prune-orphans
+scs ids prune-orphans --id BR2 --note "retired"
 
 # Build / clean (IDs unchanged by default)
-specticus build
-specticus build --assign-ids    # ⚠️ rewrites Markdown
-specticus clean                 # output only
+scs build
+scs build --assign-ids    # ⚠️ rewrites Markdown
+scs clean                 # output only
 ```
 
 ---

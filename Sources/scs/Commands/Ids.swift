@@ -16,7 +16,7 @@ struct Ids: ParsableCommand {
             inspect with `ids status`, prune after review with `ids prune-orphans` (#37). \
             `ids assign` rewrites Markdown in place — preview with `--dry-run` / `--diff`, \
             confirm with `--yes` when non-interactive (#35). Build-time ids.auto_assign is \
-            report-only; mutation requires `specticus build --assign-ids` (#38). Collaboration \
+            report-only; mutation requires `scs build --assign-ids` (#38). Collaboration \
             (#39): duplicate live IDs block assign/lint (ID hygiene only — specticus never \
             latches onto git/fossil/svn or SCM merge markers).
             """,
@@ -31,11 +31,11 @@ struct Ids: ParsableCommand {
     func run() throws {
         print("""
             Use:
-              specticus ids assign --dry-run
-              specticus ids assign --yes
-              specticus ids accept-drift <ID>
-              specticus ids status
-              specticus ids prune-orphans
+              scs ids assign --dry-run
+              scs ids assign --yes
+              scs ids accept-drift <ID>
+              scs ids status
+              scs ids prune-orphans
             Workflow guide: docs/traceability-ids.md (#41).
             (also issues #6, #35, #37, #66).
             """)
