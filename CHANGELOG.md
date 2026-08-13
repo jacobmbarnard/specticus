@@ -10,6 +10,9 @@ as described in [docs/release-process.md](docs/release-process.md).
 
 ### Added
 
+- README badges for CI, Release binaries workflow, per-platform release matrix
+  (macOS arm64 / Linux x86_64 / Linux arm64), Windows TBD, and latest release (#137)
+
 ### Changed
 
 ### Fixed
