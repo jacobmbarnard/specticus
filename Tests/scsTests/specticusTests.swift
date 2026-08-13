@@ -2964,3 +2964,32 @@ private func makeLifecycleFixture(
     #expect(executable.contains("xdg-open"))
     #endif
 }
+
+// MARK: - Brand chrome (#135)
+
+@Test func brandVersionIsSemver() {
+    #expect(Brand.version.contains("."))
+    #expect(!Brand.version.isEmpty)
+}
+
+@Test func brandWordmarkContainsSpecticusShape() {
+    let mark = Brand.wordmark
+    #expect(mark.contains("_"))
+    #expect(mark.contains("|"))
+    #expect(mark.split(separator: "\n").count >= 5)
+    #expect(!mark.hasSuffix(" "))
+}
+
+@Test func brandRootVersionInvocationDetection() {
+    #expect(Brand.isRootVersionInvocation(arguments: ["scs", "--version"]))
+    #expect(!Brand.isRootVersionInvocation(arguments: ["scs", "build", "--version"]))
+    #expect(!Brand.isRootVersionInvocation(arguments: ["scs", "--help"]))
+}
+
+@Test func brandHelpInvocationDetection() {
+    #expect(Brand.isHelpInvocation(arguments: ["scs", "--help"]))
+    #expect(Brand.isHelpInvocation(arguments: ["scs", "-h"]))
+    #expect(Brand.isHelpInvocation(arguments: ["scs", "help"]))
+    #expect(Brand.isHelpInvocation(arguments: ["scs", "build", "--help"]))
+    #expect(!Brand.isHelpInvocation(arguments: ["scs", "build"]))
+}

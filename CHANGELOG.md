@@ -8,15 +8,27 @@ as described in [docs/release-process.md](docs/release-process.md).
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+### Fixed
+
+## [0.2.0] - 2026-08-13
+
+Public command rename and terminal brand chrome. Pre-1.0: scripts that call
+`specticus` as a binary name should switch to **`scs`**.
+
 ### Changed
 
 - **CLI command renamed** from `specticus` to **`scs`** (#133). Install via
   Homebrew remains `brew install specticus` (formula/tap name); the binary on
-  `PATH` is `scs`. Update scripts and muscle memory accordingly (pre-1.0 break).
+  `PATH` is `scs`.
 
 ### Added
 
-### Fixed
+- ASCII **specticus** wordmark at the top of `scs --help` and `scs --version`
+  when stdout is a TTY (#135)
 
 ## [0.1.0] - 2026-08-06
 
@@ -58,7 +70,7 @@ code, stable traceability IDs, HTML output, and install paths for macOS and Linu
 <!--
 When cutting a release:
 1. Rename [Unreleased] notes into ## [X.Y.Z] - YYYY-MM-DD
-2. Set Sources/scs/scs.swift version to "X.Y.Z"
+2. Set Sources/scs version (Brand.version) to "X.Y.Z"
 3. Tag vX.Y.Z and create a GitHub Release
 4. Keep an empty ## [Unreleased] section above
 See docs/release-process.md.

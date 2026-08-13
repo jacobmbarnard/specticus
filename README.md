@@ -53,7 +53,7 @@ Homebrew plus **Xcode / Swift 6.2+**. The first install may take several minutes
 while dependencies compile. For unreleased `develop`, use `brew install --HEAD specticus`.
 
 ```bash
-scs --version   # 0.1.0 on the v0.1.0 release
+scs --version   # 0.2.0 on the v0.2.0 release
 ```
 
 Maintainer notes: **[docs/homebrew.md](docs/homebrew.md)**.
@@ -68,9 +68,9 @@ matrix, checksums, and **macOS Gatekeeper** notes (unsigned builds may need
 
 ```bash
 # Example — pick the asset matching your OS/arch from the release page:
-tar -xzf specticus-0.1.0-linux-x86_64.tar.gz
+tar -xzf specticus-0.2.0-linux-x86_64.tar.gz
 mkdir -p "$HOME/.local"
-cp -R specticus-0.1.0-linux-x86_64/bin specticus-0.1.0-linux-x86_64/libexec "$HOME/.local/"
+cp -R specticus-0.2.0-linux-x86_64/bin specticus-0.2.0-linux-x86_64/libexec "$HOME/.local/"
 export PATH="$HOME/.local/bin:$PATH"
 scs --version
 ```
@@ -231,11 +231,11 @@ open public issues for exploitable security problems.
 
 ## Versioning and releases
 
-specticus uses Semantic Versioning. Current release: **0.1.0** (`v0.1.0`).
+specticus uses Semantic Versioning. Current release: **0.2.0** (`v0.2.0`).
 See **[CHANGELOG.md](CHANGELOG.md)** for user-facing history and
 **[docs/release-process.md](docs/release-process.md)** for how versions, tags, and
 GitHub Releases are cut. The CLI reports its version via `scs --version`
-(should match the installed release; **0.1.0** for the first public tag).
+(should match the installed release; **0.2.0** after this tag).
 
 ## License
 

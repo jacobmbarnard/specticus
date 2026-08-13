@@ -37,17 +37,23 @@ fi
 # Prefer explicit VERSION; else parse CLI version string from source.
 if [[ -z "${VERSION:-}" ]]; then
   VERSION="$(
-    # Prefer scs.swift; fall back to legacy specticus.swift filename
+    # Brand.version is the source of truth (see Sources/scs/Brand.swift)
+    if [[ -f Sources/scs/Brand.swift ]]; then
+      sed -n 's/.*static let version = "\([^"]*\)".*/\1/p' Sources/scs/Brand.swift | head -1
+    fi
+  )"
+  if [[ -z "${VERSION}" ]]; then
+    # Legacy: version: "X.Y.Z" on the root command
     for f in Sources/scs/scs.swift Sources/scs/specticus.swift; do
       if [[ -f "$f" ]]; then
-        sed -n 's/.*version: "\([^"]*\)".*/\1/p' "$f" | head -1
+        VERSION="$(sed -n 's/.*version: "\([^"]*\)".*/\1/p' "$f" | head -1)"
         break
       fi
     done
-  )"
+  fi
 fi
 if [[ -z "${VERSION}" ]]; then
-  echo "error: could not determine VERSION (set VERSION= or check Sources/scs/* for version string)" >&2
+  echo "error: could not determine VERSION (set VERSION= or check Brand.version)" >&2
   exit 1
 fi
 
