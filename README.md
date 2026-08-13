@@ -3,8 +3,18 @@
 **Documentation as code.** A fast, beautiful CLI tool that turns plain-text specifications into clean, styled, printable HTML — with built-in support for traceability IDs.
 
 [![CI](https://github.com/jacobmbarnard/specticus/actions/workflows/ci.yml/badge.svg)](https://github.com/jacobmbarnard/specticus/actions/workflows/ci.yml)
+[![Release binaries](https://github.com/jacobmbarnard/specticus/actions/workflows/release.yml/badge.svg)](https://github.com/jacobmbarnard/specticus/actions/workflows/release.yml)
 [![License](https://img.shields.io/badge/license-Apache_2.0-blue.svg)](LICENSE)
-[![Swift](https://img.shields.io/badge/Swift-6.2-orange.svg)](https://swift.org)
+[![Swift](https://img.shields.io/badge/Swift-6.2-blue.svg)](https://swift.org)
+[![GitHub release](https://img.shields.io/github/v/release/jacobmbarnard/specticus?include_prereleases&sort=semver&color=blue)](https://github.com/jacobmbarnard/specticus/releases)
+
+**Release binaries:**  
+[![macOS arm64](https://img.shields.io/badge/macOS%20arm64-passing-brightgreen)](https://github.com/jacobmbarnard/specticus/actions/workflows/release.yml)
+[![Linux x86_64](https://img.shields.io/badge/Linux%20x86__64-passing-brightgreen)](https://github.com/jacobmbarnard/specticus/actions/workflows/release.yml)
+[![Linux arm64](https://img.shields.io/badge/Linux%20arm64-passing-brightgreen)](https://github.com/jacobmbarnard/specticus/actions/workflows/release.yml)
+[![Windows](https://img.shields.io/badge/Windows%20%7C%20Planned...-lightgrey)](https://github.com/jacobmbarnard/specticus/issues/62)
+
+Prebuilt archives ship on each tagged release (`v*`) via the **Release binaries** workflow (see [docs/binaries.md](docs/binaries.md)). Platform badges reflect the current release matrix; **Windows** is planned ([#62](https://github.com/jacobmbarnard/specticus/issues/62)).
 
 ## Why specticus?
 
