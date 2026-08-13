@@ -40,7 +40,7 @@ specticus-<version>-<platform>-<arch>.tar.gz
 specticus-<version>-<platform>-<arch>.tar.gz.sha256
 ```
 
-Example: `specticus-0.1.0-linux-x86_64.tar.gz`
+Example: `specticus-0.2.0-linux-x86_64.tar.gz`
 
 ## Archive layout
 

@@ -13,9 +13,9 @@ class Specticus < Formula
   license "Apache-2.0"
 
   url "https://github.com/jacobmbarnard/specticus.git",
-      tag:      "v0.1.0",
-      revision: "07f233141d53cd95b374d687b39bac7b00263945"
-  version "0.1.0"
+      tag:      "v0.2.0",
+      revision: "fe99284d11a74c895e906ee7fc25c8fc7c8af436"
+  version "0.2.0"
 
   head "https://github.com/jacobmbarnard/specticus.git", branch: "develop"
 
