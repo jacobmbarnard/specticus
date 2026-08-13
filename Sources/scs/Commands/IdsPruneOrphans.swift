@@ -16,9 +16,9 @@ struct IdsPruneOrphans: ParsableCommand {
             By default orphans are kept for audit history and to reserve their numbers \
             (counter policy #33: never reuse). After deliberate review, prune them:
 
-                specticus ids prune-orphans
-                specticus ids prune-orphans --dry-run
-                specticus ids prune-orphans --id BR2 --note "retired under CR-99"
+                scs ids prune-orphans
+                scs ids prune-orphans --dry-run
+                scs ids prune-orphans --id BR2 --note "retired under CR-99"
 
             Behavior:
             - Removes orphan bindings only (or a single --id if it is an orphan)

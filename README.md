@@ -15,7 +15,7 @@ Writing specifications in Markdown keeps them close to the code and under versio
 - **Specifications as code** — Author in plain Markdown, generate beautiful HTML
 - **Traceability IDs** — Stable, human-readable identifiers (`BR1`, `TS2`, etc.) with drift detection
 - **Clean output** — Light/dark theme support, printable, well-structured HTML
-- **Powerful CLI** — `init`, `build`, `open`, `lint`, `clean`, and `ids` subcommands
+- **Powerful CLI** — `scs` with `init`, `build`, `open`, `lint`, `clean`, and `ids` subcommands
 - **Fast** — Written in Swift with minimal dependencies
 
 **Using IDs for the first time?** Read **[Traceability IDs: recommended workflow and common pitfalls](docs/traceability-ids.md)** — syntax, when to assign vs lint vs build, drift, orphans, team patterns, and recovery recipes (#41).
@@ -23,7 +23,7 @@ Writing specifications in Markdown keeps them close to the code and under versio
 ## Happy path
 
 ```bash
-# macOS (Homebrew) — or use a GitHub Release binary (below)
+# macOS (Homebrew) — installs the `scs` command (or use a GitHub Release binary)
 brew tap jacobmbarnard/specticus https://github.com/jacobmbarnard/specticus
 brew install specticus
 
@@ -82,16 +82,16 @@ git clone https://github.com/jacobmbarnard/specticus.git
 cd specticus
 swift build -c release
 # Install the binary *and* its SPM resources side-by-side (required for `init`).
-# macOS: specticus_*.bundle · Linux: specticus_*.resources
-mkdir -p ~/.local/libexec/specticus
-cp .build/release/specticus ~/.local/libexec/specticus/
-cp -R .build/release/specticus_*.bundle .build/release/specticus_*.resources \
-  ~/.local/libexec/specticus/ 2>/dev/null || true
-printf '%s\n' '#!/bin/sh' 'exec "$HOME/.local/libexec/specticus/specticus" "$@"' > ~/.local/bin/specticus
-chmod +x ~/.local/bin/specticus
+# macOS: scs_*.bundle · Linux: scs_*.resources
+mkdir -p ~/.local/libexec/scs
+cp .build/release/scs ~/.local/libexec/scs/
+cp -R .build/release/scs_*.bundle .build/release/scs_*.resources \
+  ~/.local/libexec/scs/ 2>/dev/null || true
+printf '%s\n' '#!/bin/sh' 'exec "$HOME/.local/libexec/scs/scs" "$@"' > ~/.local/bin/scs
+chmod +x ~/.local/bin/scs
 ```
 
-Copying only the binary (without the SPM resource bundle/dir) breaks `specticus init`
+Copying only the binary (without the SPM resource bundle/dir) breaks `scs init`
 with a “could not load resource bundle” fatal error.
 
 > **Also planned:** Linux distro packages (#61), Windows installer (#62).
@@ -130,7 +130,7 @@ scs ids prune-orphans
 
 ### `ids.auto_assign` and build safety
 
-`ids.auto_assign` in `.specticus/config.yml` is **report-only during build**. With it enabled, `specticus build` prints a dry-run of pending ID assignments but **does not rewrite Markdown**.
+`ids.auto_assign` in `.specticus/config.yml` is **report-only during build**. With it enabled, `scs build` prints a dry-run of pending ID assignments but **does not rewrite Markdown**.
 
 To mutate sources as part of a build you must pass an **explicit** flag:
 
@@ -200,9 +200,9 @@ specticus is **SCM-agnostic by design**: it never calls Git, Fossil, SVN, or any
 1. **Integrate first** — bring in the latest documentation before running `ids assign`.
 2. **One assign pass per integrate cycle** — prefer a single person (or CI job) to mint new IDs after teammates have landed plain-language headings.
 3. **Commit Markdown and `ids.json` together** — treat them as one unit so the store stays coherent with sources.
-4. **Preview before rewrite** — `specticus ids assign --dry-run` (add `--diff`), then `--yes` when ready.
+4. **Preview before rewrite** — `scs ids assign --dry-run` (add `--diff`), then `--yes` when ready.
 5. **Never enable source mutation in shared CI by default** — `ids.auto_assign` is report-only on build; `--assign-ids` is opt-in (#38).
-6. **Keep each live ID unique** — if concurrent assigns produce duplicates, edit Markdown so each ID appears once, then re-run `specticus lint`.
+6. **Keep each live ID unique** — if concurrent assigns produce duplicates, edit Markdown so each ID appears once, then re-run `scs lint`.
 
 ```bash
 # After integrating teammates' doc changes:
@@ -234,7 +234,7 @@ open public issues for exploitable security problems.
 specticus uses Semantic Versioning. Current release: **0.1.0** (`v0.1.0`).
 See **[CHANGELOG.md](CHANGELOG.md)** for user-facing history and
 **[docs/release-process.md](docs/release-process.md)** for how versions, tags, and
-GitHub Releases are cut. The CLI reports its version via `specticus --version`
+GitHub Releases are cut. The CLI reports its version via `scs --version`
 (should match the installed release; **0.1.0** for the first public tag).
 
 ## License

@@ -58,8 +58,8 @@ struct Init: ParsableCommand {
             print("  cd \(targetDir)")
         }
         print("  # Edit title.yml and .specticus/config.yml as needed")
-        print("  specticus lint")
-        print("  specticus build")
+        print("  scs lint")
+        print("  scs build")
         print("  # Edit section files, then re-build. See README.md for more.")
     }
 

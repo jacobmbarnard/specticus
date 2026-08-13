@@ -14,8 +14,8 @@ struct IdsAcceptDrift: ParsableCommand {
             Specticus blocks silent continuation (content drift). After review, rebind that \
             single ID to the current heading text:
 
-                specticus ids accept-drift BR1
-                specticus ids accept-drift BR1 --note "editorial rename under CR-42"
+                scs ids accept-drift BR1
+                scs ids accept-drift BR1 --note "editorial rename under CR-42"
 
             Behavior:
             - Updates only the binding for <ID> in .specticus/ids.json

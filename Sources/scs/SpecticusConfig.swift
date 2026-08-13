@@ -206,10 +206,10 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
     }
 
     struct IdsSection: Codable, Equatable, Sendable {
-        /// When true, `specticus build` reports pending ID assignments (dry-run only) (#6 / #38).
+        /// When true, `scs build` reports pending ID assignments (dry-run only) (#6 / #38).
         ///
         /// **Does not rewrite Markdown by itself.** Actual source mutation during build requires
-        /// an explicit `specticus build --assign-ids`. Prefer `specticus ids assign --dry-run`
+        /// an explicit `scs build --assign-ids`. Prefer `scs ids assign --dry-run`
         /// then `--yes` (#35). Leaving this true in CI is safe for reporting; never pass
         /// `--assign-ids` in shared or automated checkouts unless intentional.
         var autoAssign: Bool

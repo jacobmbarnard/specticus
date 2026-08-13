@@ -409,11 +409,11 @@ enum IdsManager {
 
     // MARK: - Assign options & safety (#35 / #38)
 
-    /// How `specticus build` may invoke ID assignment (#38).
+    /// How `scs build` may invoke ID assignment (#38).
     ///
     /// `ids.auto_assign: true` alone never rewrites Markdown during build — it only reports.
-    /// Actual source mutation requires an explicit `specticus build --assign-ids` (or a separate
-    /// `specticus ids assign --yes`). This reduces foot-guns in CI and shared repos.
+    /// Actual source mutation requires an explicit `scs build --assign-ids` (or a separate
+    /// `scs ids assign --yes`). This reduces foot-guns in CI and shared repos.
     enum BuildAssignMode: String, Equatable, Sendable {
         /// Do not run assign during build.
         case off
@@ -523,9 +523,9 @@ enum IdsManager {
                 print("""
                     ⚠️  ids.auto_assign is enabled — build is reporting pending ID assignments only (#38).
                        Markdown sources will NOT be rewritten during this build.
-                       To apply assignments on build:  specticus build --assign-ids
-                       Or assign explicitly:           specticus ids assign --dry-run
-                                                       specticus ids assign --yes
+                       To apply assignments on build:  scs build --assign-ids
+                       Or assign explicitly:           scs ids assign --dry-run
+                                                       scs ids assign --yes
                        Disable reporting: set ids.auto_assign: false in .specticus/config.yml
                        ⚠️  --assign-ids REWRITES Markdown in place (dangerous in CI / shared checkouts).
                     """)
@@ -533,13 +533,13 @@ enum IdsManager {
                 print("""
                     🚨 BUILD --assign-ids: will run `ids assign` and may REWRITE Markdown sources in place (#38).
                        This is intentional only when you opted in with the flag (and/or ids.auto_assign).
-                       Prefer a dedicated `specticus ids assign --dry-run` then `--yes` workflow in CI.
+                       Prefer a dedicated `scs ids assign --dry-run` then `--yes` workflow in CI.
                        Review the git diff before committing any rewritten sources.
                     """)
             case .off, nil:
                 print("""
                     ⚠️  Build-time ID assign context (#35/#38).
-                       Prefer: specticus ids assign --dry-run  then  specticus ids assign --yes
+                       Prefer: scs ids assign --dry-run  then  scs ids assign --yes
                     """)
             }
         }
@@ -624,7 +624,7 @@ enum IdsManager {
                 print("     now: \(d.newContent)  (\(d.file))")
             }
             print("   → Revert the heading text, or after review rebind one ID at a time:")
-            print("      specticus ids accept-drift <ID>   (same identity / reword only — #66)")
+            print("      scs ids accept-drift <ID>   (same identity / reword only — #66)")
         }
 
         // Orphans are informational during assign — they reserve numbers (#33/#37) and do not block.
@@ -638,8 +638,8 @@ enum IdsManager {
             if orphans.count > 8 {
                 print("   ... and \(orphans.count - 8) more")
             }
-            print("   → Leave them for history, or after review: specticus ids prune-orphans")
-            print("   → Inspect: specticus ids status")
+            print("   → Leave them for history, or after review: scs ids prune-orphans")
+            print("   → Inspect: scs ids status")
         }
 
         // Per-file context: if a file already owns IDs of one prefix family (e.g. TS1, TS2),
@@ -805,7 +805,7 @@ enum IdsManager {
         }
         print("   Will update .specticus/\(storeName)")
         print("   Existing ID tokens are never overwritten; only missing IDs are injected.")
-        print("   Tip: preview with `specticus ids assign --dry-run` (add --diff for line patches).")
+        print("   Tip: preview with `scs ids assign --dry-run` (add --diff for line patches).")
     }
 
     /// Print simple unified-style hunks for planned ID injections (not a full git patch).
@@ -1229,7 +1229,7 @@ enum IdsManager {
             print("  Store: .specticus/ids.json present (\(report.bindingCount) binding(s))")
         } else {
             print("  Store: .specticus/ids.json missing (treated as empty)")
-            print("      → Recovery: run `specticus ids assign` to bootstrap from Markdown IDs")
+            print("      → Recovery: run `scs ids assign` to bootstrap from Markdown IDs")
         }
 
         print("  Live IDs in Markdown: \(report.liveIDs.count)")
@@ -1247,7 +1247,7 @@ enum IdsManager {
 
         if !report.unboundLiveIDs.isEmpty {
             print("  ℹ️  Live IDs not yet in store: \(report.unboundLiveIDs.joined(separator: ", "))")
-            print("      → Run `specticus ids assign` to bind them")
+            print("      → Run `scs ids assign` to bind them")
         }
 
         if !report.drifts.isEmpty {
@@ -1258,7 +1258,7 @@ enum IdsManager {
             if report.drifts.count > 8 {
                 print("      … and \(report.drifts.count - 8) more")
             }
-            print("      → `specticus ids accept-drift <ID>` after review (#66)")
+            print("      → `scs ids accept-drift <ID>` after review (#66)")
         } else if report.bindingCount > 0 {
             print("  ✅ No content drift (mode=\(sensitivity.rawValue))")
         }
@@ -1273,7 +1273,7 @@ enum IdsManager {
             if report.orphans.count > 12 {
                 print("      … and \(report.orphans.count - 12) more")
             }
-            print("      → Leave for audit history, or `specticus ids prune-orphans` after review")
+            print("      → Leave for audit history, or `scs ids prune-orphans` after review")
             print("      → Pruning removes the binding only; counters never decrease (numbers stay reserved)")
         }
 

@@ -13,12 +13,12 @@ struct Build: ParsableCommand {
         Each build can increment a counter in `.specticus/build-number.yml` and stamp the HTML footer (#8). \
         Headings are auto-numbered hierarchically through level 3 by default (#4; config up to 6). \
         A hyperlinked table of contents is injected by default (#12). \
-        Use `specticus lint` first to validate. CLI flags override config values.
+        Use `scs lint` first to validate. CLI flags override config values.
 
         Traceability IDs / auto_assign safety (#38):
         - ids.auto_assign: true only reports pending ID assignments during build (dry-run; no source writes).
         - Actual Markdown mutation on build requires explicit --assign-ids (dangerous in CI/shared repos).
-        - Safer default workflow: specticus ids assign --dry-run  then  specticus ids assign --yes.
+        - Safer default workflow: scs ids assign --dry-run  then  scs ids assign --yes.
         """
     )
 
@@ -48,7 +48,7 @@ struct Build: ParsableCommand {
         help: """
             Explicitly run ids assign and allow rewriting Markdown sources in place during build (#38). \
             Without this flag, ids.auto_assign only prints a dry-run report. Prefer \
-            `specticus ids assign --dry-run` / `--yes` over baking mutation into CI builds.
+            `scs ids assign --dry-run` / `--yes` over baking mutation into CI builds.
             """
     )
     var assignIds: Bool = false
@@ -61,7 +61,7 @@ struct Build: ParsableCommand {
         }
 
         if project.configSource == .defaults {
-            print("ℹ️  No .specticus/config.yml found — using built-in defaults. Run `specticus init` for a full project.")
+            print("ℹ️  No .specticus/config.yml found — using built-in defaults. Run `scs init` for a full project.")
         }
 
         var markdown = try DocumentGenerator.assembleSources(

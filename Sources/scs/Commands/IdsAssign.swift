@@ -8,19 +8,19 @@ struct IdsAssign: ParsableCommand {
             IDs are simple (BR1, BR2, TS1, ...). Must be unique. Detects content drift \
             (heading text vs ids.json; sensitivity via ids.drift_sensitivity, default strict — #36). \
             Never auto-accepts drift and never overwrites existing ID tokens. After review, rebind \
-            one ID at a time with `specticus ids accept-drift <ID>` (#66). Rejects Markdown \
+            one ID at a time with `scs ids accept-drift <ID>` (#66). Rejects Markdown \
             formatting in headings. By default only H1–H2 may own IDs (ids.heading_max_level, #32). \
             New numbers are (per-prefix max)+1, never reused (#33). Orphan bindings (deleted \
             headings) are reported but left in place; use `ids status` / `ids prune-orphans` (#37).
 
             Source mutation safety (#35 / #38):
             - Assign rewrites Markdown **in place** when new IDs are needed.
-            - Prefer `specticus ids assign --dry-run` (add `--diff` for line-level patches) first.
+            - Prefer `scs ids assign --dry-run` (add `--diff` for line-level patches) first.
             - Interactive sessions prompt before rewriting unless `--yes` is passed.
             - Non-interactive sessions require `--yes` to rewrite source files.
             - Missing ids.json is recovered by bootstrapping from live Markdown IDs.
             - Build does not mutate sources when ids.auto_assign is true alone (#38);
-              use `specticus build --assign-ids` only when you intentionally want that.
+              use `scs build --assign-ids` only when you intentionally want that.
 
             Collaboration hazards (#39) — ID hygiene (SCM-agnostic by design):
             - Duplicate live IDs (classic concurrent `ids assign` fallout) block writes.

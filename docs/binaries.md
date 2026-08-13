@@ -48,15 +48,15 @@ Each tarball expands to a relocatable tree:
 
 ```text
 specticus-<version>-<platform>-<arch>/
-  bin/specticus                 # thin wrapper (add this dir to PATH)
-  libexec/specticus             # real executable
-  libexec/specticus_*.bundle    # macOS SPM resources (Bundle.module)
-  # or libexec/specticus_*.resources on Linux
+  bin/scs                 # thin wrapper (add this dir to PATH)
+  libexec/scs             # real executable
+  libexec/scs_*.bundle    # macOS SPM resources (Bundle.module)
+  # or libexec/scs_*.resources on Linux
   INSTALL.txt
 ```
 
 The resource bundle **must** stay next to the real binary under `libexec/`.
-Shipping only `bin/specticus` breaks `specticus init` (same class of bug as the
+Shipping only `bin/scs` breaks `scs init` (same class of bug as the
 Homebrew “binary-only” install).
 
 ## Install from a GitHub Release
@@ -77,8 +77,8 @@ Homebrew “binary-only” install).
    mkdir -p "$HOME/.local"
    cp -R specticus-VERSION-PLATFORM/bin specticus-VERSION-PLATFORM/libexec "$HOME/.local/"
    export PATH="$HOME/.local/bin:$PATH"
-   specticus --version
-   specticus init MySpecs
+   scs --version
+   scs init MySpecs
    ```
 
 ## macOS Gatekeeper / quarantine

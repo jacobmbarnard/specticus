@@ -2934,7 +2934,7 @@ private func makeLifecycleFixture(
         Issue.record("Expected error for missing HTML")
     } catch {
         let message = String(describing: error)
-        #expect(message.contains("specticus build") || message.contains("not found"))
+        #expect(message.contains("scs build") || message.contains("not found"))
     }
 }
 

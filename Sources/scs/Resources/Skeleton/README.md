@@ -5,18 +5,18 @@ A specification and documentation project managed with [specticus](https://githu
 ## Quick Start
 
 ```bash
-specticus lint          # validate your project layout first
-specticus build
+scs lint          # validate your project layout first
+scs build
 # → output/index.html plus css/, img/, svg/ assets
 
 # or force a single file:
-specticus build --input welcome-template.md
+scs build --input welcome-template.md
 
 # Traceability IDs (assign rewrites Markdown — preview first):
-# specticus ids assign --dry-run
-# specticus ids assign --yes
+# scs ids assign --dry-run
+# scs ids assign --yes
 # ids.auto_assign in .specticus/config.yml only reports during build;
-# mutation requires: specticus build --assign-ids  (avoid in CI unless intentional)
+# mutation requires: scs build --assign-ids  (avoid in CI unless intentional)
 #
 # Full workflow + pitfalls:
 # https://github.com/jacobmbarnard/specticus/blob/develop/docs/traceability-ids.md
@@ -31,7 +31,7 @@ specticus build --input welcome-template.md
 - Project config in `.specticus/config.yml` (output path, CSS, asset copy, diagrams, ID settings)
 - Metadata in `title.yml` (used for the HTML document title)
 
-Edit the Markdown files and config, then run `specticus build`. Open `output/index.html` in a browser (CSS and images are copied beside it).
+Edit the Markdown files and config, then run `scs build`. Open `output/index.html` in a browser (CSS and images are copied beside it).
 
 ## Philosophy
 

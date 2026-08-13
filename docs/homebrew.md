@@ -15,7 +15,7 @@ brew install specticus          # stable (tagged) formula when present
 Then:
 
 ```bash
-specticus --version
+scs --version
 ```
 
 ### Requirements
@@ -32,13 +32,13 @@ minutes). Prebuilt downloadable archives (no local compile) are documented in
 
 ### Resource bundle (required for `init`)
 
-SwiftPM embeds init templates in `specticus_specticus.bundle` next to the release
+SwiftPM embeds init templates in `scs_scs.bundle` next to the release
 binary (`Bundle.module`). The formula installs the binary **and** that bundle into
 `libexec`, with a thin wrapper on `PATH`. Installing only the binary (e.g. a bare
-`cp .build/release/specticus …`) causes:
+`cp .build/release/scs …`) causes:
 
 ```text
-Fatal error: could not load resource bundle: …/specticus_specticus.bundle
+Fatal error: could not load resource bundle: …/scs_scs.bundle
 ```
 
 Reinstall after formula updates with `brew upgrade specticus` or
@@ -88,7 +88,7 @@ Then update the formula for a **stable** install (not only HEAD):
    ```
 
 Do **not** invent a second version scheme: formula `version` must match the CLI
-`specticus --version` string and the git tag without the `v` prefix.
+`scs --version` string and the git tag without the `v` prefix.
 
 ## Maintainer: smoke-check on a Mac
 
@@ -97,8 +97,8 @@ brew tap-new jacobmbarnard/specticus-dev 2>/dev/null || true
 # Or use the real tap URL against your fork / this repo:
 brew tap jacobmbarnard/specticus https://github.com/jacobmbarnard/specticus
 brew install --verbose specticus
-specticus --version
-specticus --help
+scs --version
+scs --help
 brew test specticus
 brew uninstall specticus
 ```

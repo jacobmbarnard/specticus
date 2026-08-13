@@ -8,9 +8,13 @@ as described in [docs/release-process.md](docs/release-process.md).
 
 ## [Unreleased]
 
-### Added
-
 ### Changed
+
+- **CLI command renamed** from `specticus` to **`scs`** (#133). Install via
+  Homebrew remains `brew install specticus` (formula/tap name); the binary on
+  `PATH` is `scs`. Update scripts and muscle memory accordingly (pre-1.0 break).
+
+### Added
 
 ### Fixed
 
@@ -30,7 +34,7 @@ code, stable traceability IDs, HTML output, and install paths for macOS and Linu
   `docs/homebrew.md`) (#119)
 - Prebuilt GitHub Release binaries for **macOS arm64** and **Linux** (x86_64,
   arm64), with packaging script and release workflow (#120)
-- `specticus open` to launch built HTML in the default browser (#122)
+- `scs open` to launch built HTML in the default browser (#122)
 - Release process, versioning, and changelog policy (`docs/release-process.md`)
   (#52)
 - Maintainer-driven contribution guide (`CONTRIBUTING.md`)
@@ -41,7 +45,7 @@ code, stable traceability IDs, HTML output, and install paths for macOS and Linu
 ### Fixed
 
 - Homebrew and manual installs ship the SPM resource bundle with the binary so
-  `specticus init` can load embedded Skeleton templates (`Bundle.module`)
+  `scs init` can load embedded Skeleton templates (`Bundle.module`)
 - Linux prebuilt archives link the Swift standard library statically so the
   binary runs without `libswiftCore.so` / a local Swift toolchain
 
@@ -54,7 +58,7 @@ code, stable traceability IDs, HTML output, and install paths for macOS and Linu
 <!--
 When cutting a release:
 1. Rename [Unreleased] notes into ## [X.Y.Z] - YYYY-MM-DD
-2. Set Sources/specticus/specticus.swift version to "X.Y.Z"
+2. Set Sources/scs/scs.swift version to "X.Y.Z"
 3. Tag vX.Y.Z and create a GitHub Release
 4. Keep an empty ## [Unreleased] section above
 See docs/release-process.md.
