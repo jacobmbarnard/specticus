@@ -26,9 +26,11 @@ struct DocumentGenerator {
             maxLevel: tocMaxLevel
         )
         let bodyHTML = tocApplied.bodyHTML
-        let tocBlock = tocApplied.tocHTML.isEmpty
-            ? ""
-            : "\n            \(tocApplied.tocHTML.replacingOccurrences(of: "\n", with: "\n            "))\n"
+        let tocHTML = tocApplied.tocHTML
+        let hasTOC = !tocHTML.isEmpty
+        let sidebarTOC = hasTOC
+            ? tocHTML.replacingOccurrences(of: "\n", with: "\n            ")
+            : "<p class=\"sidebar-empty text-muted\">No contents</p>"
 
         let escapedTitle = escapeHTML(title)
 
@@ -37,43 +39,46 @@ struct DocumentGenerator {
             let line = escapeHTML(buildInfo.displayLine)
             footerHTML = """
 
-    <footer class="site-footer">
-        <div class="site-footer-inner text-muted">
-            \(line)
-        </div>
-    </footer>
+            <footer class="site-footer">
+                <div class="site-footer-inner text-muted">
+                    \(line)
+                </div>
+            </footer>
 """
         } else {
             footerHTML = ""
         }
 
-        let tocNavLink = tocApplied.tocHTML.isEmpty
-            ? "<span class=\"site-nav text-muted\">Documentation</span>"
-            : "<a class=\"site-nav\" href=\"#toc\">Contents</a>"
-
+        // Layout: left sidebar (browser) + main column; print CSS hides sidebar (#143).
         return """
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
     <title>\(escapedTitle)</title>
     <link rel="stylesheet" href="\(escapeHTML(stylesheet))">
 </head>
 <body>
-    <header class="site-header">
-        <div class="site-header-inner">
-            <a href="#" class="site-title">specticus</a>
-            \(tocNavLink)
-        </div>
-    </header>
-
-    <main class="main-content">
-        <div class="page-content">\(tocBlock)
+    <div class="layout">
+        <aside class="sidebar" aria-label="Document navigation">
+            <div class="sidebar-header">
+                <a href="#" class="sidebar-brand">specticus</a>
+                <p class="sidebar-tagline text-muted">documentation as code</p>
+            </div>
+            <div class="sidebar-nav">
+            \(sidebarTOC)
+            </div>
+        </aside>
+        <div class="layout-main">
+            <main class="main-content" id="main">
+                <article class="page-content">
             \(bodyHTML)
+                </article>
+            </main>\(footerHTML)
         </div>
-    </main>
-\(footerHTML)
+    </div>
 </body>
 </html>
 """

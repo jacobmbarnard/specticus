@@ -11,9 +11,12 @@ as described in [docs/release-process.md](docs/release-process.md).
 ### Added
 
 - README badges for CI, Release binaries workflow, per-platform release matrix
-  (macOS arm64 / Linux x86_64 / Linux arm64), Windows TBD, and latest release (#137)
+  (macOS arm64 / Linux x86_64 / Linux arm64), Windows planned, and latest release (#137)
 
 ### Changed
+
+- Default HTML theme: grayscale (no accent color), Helvetica/Arial stack, left
+  sidebar TOC in the browser and linear print layout without the menu (#143)
 
 ### Fixed
 
