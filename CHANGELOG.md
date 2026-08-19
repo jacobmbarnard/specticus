@@ -17,6 +17,10 @@ as described in [docs/release-process.md](docs/release-process.md).
 
 - Default HTML theme: grayscale (no accent color), Helvetica/Arial stack, left
   sidebar TOC in the browser and linear print layout without the menu (#143)
+- Default `scs init` skeleton uses **vertical section folders** (requirements,
+  specs, glossaries, notes, …) with nested feature folders supported; ADR/BDR
+  gain `rejected/`; appendices include TS→BR mapping; flat `00N-*.md` projects
+  remain supported (#139)
 
 ### Fixed
 

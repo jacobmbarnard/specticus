@@ -39,6 +39,8 @@ struct Lint: ParsableCommand {
         let hasSpecticusDir = project.hasSpecticusDirectory
         let hasTitle = fm.fileExists(atPath: project.titleURL.path)
         let hasWelcome = fm.fileExists(atPath: project.resolve("welcome-template.md").path)
+        let rootURL = URL(fileURLWithPath: cwd, isDirectory: true)
+        let usesVertical = TemplateSections.usesVerticalLayout(at: rootURL, fm: fm)
         let mdFiles = (try? fm.contentsOfDirectory(atPath: cwd).filter {
             let lower = $0.lowercased()
             return (lower.hasSuffix(".md") || lower.hasSuffix(".markdown")) &&
@@ -47,7 +49,7 @@ struct Lint: ParsableCommand {
         }) ?? []
         let hasNumberedSections = mdFiles.contains { $0.range(of: #"^\d{3}-"#, options: .regularExpression) != nil }
 
-        if hasSpecticusDir || hasTitle || hasNumberedSections || hasWelcome {
+        if hasSpecticusDir || hasTitle || hasNumberedSections || hasWelcome || usesVertical {
             ok("Detected specticus project (or partial/legacy project)")
         } else {
             warn("No clear specticus project markers found in this directory.",
@@ -94,16 +96,47 @@ struct Lint: ParsableCommand {
                  suggestion: "The default theme is embedded in init; copy or restore it, or update build.css in config.")
         }
 
-        // --- Markdown content
-        if hasNumberedSections {
+        // --- Markdown content (#139 vertical folders or legacy flat 00N-*.md)
+        let discovered: [URL]
+        do {
+            discovered = try MarkdownSources.discoverContentFiles(in: rootURL)
+        } catch {
+            discovered = []
+            warn("Could not discover Markdown content: \(error.localizedDescription)")
+        }
+
+        if usesVertical {
+            let presentSections = TemplateSections.defaultOrder.filter { id in
+                var isDir: ObjCBool = false
+                let p = rootURL.appendingPathComponent(id, isDirectory: true).path
+                return fm.fileExists(atPath: p, isDirectory: &isDir) && isDir.boolValue
+            }
+            ok("Vertical section layout (#139): \(presentSections.count) section folder(s)")
+            if discovered.isEmpty {
+                fail("No Markdown content under section folders",
+                     suggestion: "Add `.md` files under folders such as `business-requirements/` or run `scs init`.")
+            } else {
+                ok("Found \(discovered.count) content Markdown file(s) under section folders")
+            }
+            for kind in ["ADRs", "BDRs"] {
+                let rejected = rootURL.appendingPathComponent(kind).appendingPathComponent("rejected")
+                var isDir: ObjCBool = false
+                if fm.fileExists(atPath: rejected.path, isDirectory: &isDir), isDir.boolValue {
+                    ok("\(kind)/rejected/ present")
+                } else if fm.fileExists(atPath: rootURL.appendingPathComponent(kind).path) {
+                    warn("\(kind)/rejected/ missing",
+                         suggestion: "Add a `rejected/` status folder for declined decision records (#139).")
+                }
+            }
+        } else if hasNumberedSections {
             let numberedCount = mdFiles.filter { $0.range(of: #"^\d{3}-"#, options: .regularExpression) != nil }.count
-            ok("Found \(numberedCount) numbered section file(s) (00N-*.md)")
+            ok("Legacy flat layout: \(numberedCount) numbered section file(s) (00N-*.md)")
         } else if hasWelcome {
-            warn("Only legacy welcome-template.md found (no 00N-*.md sections)",
-                 suggestion: "Consider migrating to the modern numbered section layout from `scs init`.")
-        } else if !mdFiles.isEmpty {
-            warn("Markdown files present but none follow the recommended 00N-*.md naming",
-                 suggestion: "Rename or add numbered sections for reliable lex-order assembly.")
+            warn("Only legacy welcome-template.md found (no section folders or 00N-*.md)",
+                 suggestion: "Run `scs init` for the vertical section layout (#139).")
+        } else if !discovered.isEmpty || !mdFiles.isEmpty {
+            warn("Markdown present but not using vertical section folders",
+                 suggestion: "Prefer `business-requirements/`, `technical-specifications/`, … from `scs init` (#139).")
         } else {
             fail("No Markdown content files found", suggestion: "Add at least one .md file or run `scs init`.")
         }

@@ -1,12 +1,14 @@
 import Foundation
 
-// MARK: - Shared Markdown content discovery (#35)
+// MARK: - Shared Markdown content discovery (#35 / #139)
 //
-// Single owner of “which top-level Markdown files count as project content”:
+// Single owner of “which Markdown files count as project content”:
 // - `*.md` / `*.markdown`
 // - exclude README* and welcome-template.md (assembly skip list)
-// - exclude hidden paths via FileManager `.skipsHiddenFiles` (e.g. `.specticus/`)
-// - lexicographic order by filename
+// - exclude hidden paths (e.g. `.specticus/`)
+// - **Vertical layout (#139):** recurse known section folders in pack order, then
+//   lex by relative path within each section; also include leftover root `.md` files
+// - **Legacy flat layout:** top-level files only, lex by filename
 //
 // Used by `DocumentGenerator.assembleSources`, `IdsManager.collectHeadings`, and
 // any preflight that must see the same file set as assign/lint/build ID paths.
@@ -26,11 +28,23 @@ enum MarkdownSources {
         return !excludedContentFilenames.contains(lower)
     }
 
-    /// Discover top-level content Markdown files under `directory` in lex order.
+    /// Discover content Markdown files for assembly / ID scan.
     ///
-    /// Mirrors the multi-file discovery historically inlined in assemble + collectHeadings.
+    /// - Vertical projects (#139): section folders in `TemplateSections.defaultOrder`,
+    ///   recursive under each; then any remaining root-level content files (hybrid compat).
+    /// - Flat projects: top-level content files only (legacy #3 / #35).
+    ///
     /// Does **not** apply single-file mode or welcome-template fallback — callers handle that.
     static func discoverContentFiles(in directory: URL) throws -> [URL] {
+        let root = directory.standardizedFileURL
+        if TemplateSections.usesVerticalLayout(at: root) {
+            return try discoverVerticalContentFiles(in: root)
+        }
+        return try discoverFlatContentFiles(in: root)
+    }
+
+    /// Legacy: top-level `*.md` only, lex by filename.
+    static func discoverFlatContentFiles(in directory: URL) throws -> [URL] {
         let fm = FileManager.default
         let contents = try fm.contentsOfDirectory(
             at: directory,
@@ -40,6 +54,75 @@ enum MarkdownSources {
         return contents
             .filter { isContentMarkdownFilename($0.lastPathComponent) }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// Vertical pack: ordered sections + recursive files, then leftover root files.
+    static func discoverVerticalContentFiles(in directory: URL) throws -> [URL] {
+        let fm = FileManager.default
+        let root = directory.standardizedFileURL
+        var ordered: [URL] = []
+        var seen = Set<String>()
+
+        func appendUnique(_ url: URL) {
+            let key = url.standardizedFileURL.path
+            if seen.insert(key).inserted {
+                ordered.append(url.standardizedFileURL)
+            }
+        }
+
+        for sectionID in TemplateSections.defaultOrder {
+            let sectionURL = root.appendingPathComponent(sectionID, isDirectory: true)
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: sectionURL.path, isDirectory: &isDir), isDir.boolValue else {
+                continue
+            }
+            let found = try collectMarkdownRecursively(under: sectionURL, projectRoot: root)
+            for url in found {
+                appendUnique(url)
+            }
+        }
+
+        // Hybrid: root-level content Markdown not already collected (migration / extras).
+        for url in try discoverFlatContentFiles(in: root) {
+            appendUnique(url)
+        }
+
+        return ordered
+    }
+
+    /// Recursively collect content Markdown under `directory`, sorted by relative path (lex).
+    static func collectMarkdownRecursively(under directory: URL, projectRoot: URL) throws -> [URL] {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey, .isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return []
+        }
+
+        var found: [URL] = []
+        for case let fileURL as URL in enumerator {
+            var isDir: ObjCBool = false
+            if fm.fileExists(atPath: fileURL.path, isDirectory: &isDir), isDir.boolValue {
+                continue
+            }
+            guard isContentMarkdownFilename(fileURL.lastPathComponent) else { continue }
+            found.append(fileURL.standardizedFileURL)
+        }
+
+        let rootPath = projectRoot.standardizedFileURL.path
+        return found.sorted { a, b in
+            relativePath(a, from: rootPath) < relativePath(b, from: rootPath)
+        }
+    }
+
+    private static func relativePath(_ url: URL, from rootPath: String) -> String {
+        let path = url.standardizedFileURL.path
+        if path.hasPrefix(rootPath + "/") {
+            return String(path.dropFirst(rootPath.count + 1))
+        }
+        return url.lastPathComponent
     }
 
     // MARK: Shared line primitives (fence / ATX)

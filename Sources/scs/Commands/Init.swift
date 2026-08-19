@@ -6,7 +6,7 @@ import ArgumentParser
 struct Init: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Initialize a new specticus documentation project with templates and structure.",
-        discussion: "Creates numbered section Markdown files, ADRs/ with status folders, diagrams/, .specticus/config.yml, title.yml, style.css, and a starter welcome-template.md."
+        discussion: "Creates a vertically sliced documentation tree (section folders for requirements, specs, glossaries, …), ADRs/BDRs with status folders including rejected/, appendices, diagrams/, .specticus/config.yml, title.yml, style.css, and welcome-template.md (#139)."
     )
 
     @Argument(help: "Directory name for the new project (defaults to current directory)")
@@ -48,10 +48,16 @@ struct Init: ParsableCommand {
         print("")
         print("Contents created:")
         print("  • title.yml, welcome-template.md, style.css")
-        print("  • 001-015 numbered section templates (lex order): metadata, overview, notes, constraints (biz+tech), requirements, specs, use cases, test plan, diagrams, glossary, references, BDRs, document revisions appendix")
-        print("  • ADRs/ and BDRs/ (proposed/accepted/deprecated/superseded) + examples")
-        print("  • diagrams/ (multiple starter Mermaid .mmd files)")
+        print("  • Vertical section folders (#139): document-metadata, system-overview, stakeholders-and-scope,")
+        print("    business/technical notes & constraints, business-requirements, technical-specifications,")
+        print("    quality-attributes, external-interfaces, data-and-privacy, security-and-access, use-cases,")
+        print("    test-plan, operational-concerns, risks-and-tradeoffs, compliance-and-controls,")
+        print("    business/technical glossaries, references, diagrams, appendices/tech-specs-to-business-reqs")
+        print("  • document-metadata/document-revisions/ for spec revision history")
+        print("  • ADRs/ and BDRs/ (proposed/accepted/deprecated/superseded/rejected) + examples")
+        print("  • diagrams/ (Mermaid .mmd starters)")
         print("  • .specticus/config.yml (build output, CSS, diagrams, IDs settings)")
+        print("  • Nest feature folders under any section as needed (e.g. technical-specifications/login-screen/)")
         print("")
         print("Next steps:")
         if targetDir != "." {
