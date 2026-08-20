@@ -13,9 +13,9 @@ class Specticus < Formula
   license "Apache-2.0"
 
   url "https://github.com/jacobmbarnard/specticus.git",
-      tag:      "v0.2.0",
-      revision: "fe99284d11a74c895e906ee7fc25c8fc7c8af436"
-  version "0.2.0"
+      tag:      "v0.2.1",
+      revision: "663feb57aa42cdecc60d1367fbcafa0b1cbbc046"
+  version "0.2.1"
 
   head "https://github.com/jacobmbarnard/specticus.git", branch: "develop"
 
@@ -68,6 +68,6 @@ class Specticus < Formula
     # Bundle.module must resolve (regression for bin-only install).
     system bin/"scs", "init", "myspecs"
     assert_path_exists testpath/"myspecs/.specticus/config.yml"
-    assert_path_exists testpath/"myspecs/001-document-metadata.md"
+    assert_path_exists testpath/"myspecs/document-metadata/001-title-and-authors.md"
   end
 end

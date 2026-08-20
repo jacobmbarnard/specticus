@@ -7,10 +7,10 @@ import Glibc
 
 // MARK: - Brand / CLI chrome
 
-/// Product version and terminal wordmark for `scs` (#135, v0.2.0).
+/// Product version and terminal wordmark for `scs` (#135, v0.2.1).
 enum Brand {
     /// CLI / SemVer version string (`scs --version`, formula, tags).
-    static let version = "0.2.0"
+    static let version = "0.2.1"
 
     /// Locked design from #135 (user-approved art; trailing spaces stripped).
     static let wordmark: String = [
