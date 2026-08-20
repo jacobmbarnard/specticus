@@ -2993,3 +2993,119 @@ private func makeLifecycleFixture(
     #expect(Brand.isHelpInvocation(arguments: ["scs", "build", "--help"]))
     #expect(!Brand.isHelpInvocation(arguments: ["scs", "build"]))
 }
+
+// MARK: - Vertical template sections (#139)
+
+@Test func templateSectionsDefaultOrderIncludesRequiredVerticals() {
+    let ids = Set(TemplateSections.defaultOrder)
+    for required in [
+        "document-metadata", "business-requirements", "technical-specifications",
+        "business-glossary", "technical-glossary", "business-notes", "technical-notes",
+        "quality-attributes", "external-interfaces", "appendices", "ADRs", "BDRs",
+        "assumptions-and-open-questions", "stakeholders-and-scope"
+    ] {
+        #expect(ids.contains(required))
+    }
+    #expect(!ids.contains("glossary"))
+    #expect(!ids.contains("non-functional-requirements"))
+    #expect(TemplateSections.decisionStatusFolders.contains("rejected"))
+}
+
+@Test func discoverContentFilesVerticalLayoutOrdersSectionsAndNests() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-vertical-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    // Create two sections out of narrative order on disk; discovery must follow TemplateSections.defaultOrder
+    let tech = tmp.appendingPathComponent("technical-specifications/login-screen", isDirectory: true)
+    let biz = tmp.appendingPathComponent("business-requirements", isDirectory: true)
+    try fm.createDirectory(at: tech, withIntermediateDirectories: true)
+    try fm.createDirectory(at: biz, withIntermediateDirectories: true)
+    try "# TS nested".write(to: tech.appendingPathComponent("010-auth.md"), atomically: true, encoding: .utf8)
+    try "# TS root".write(
+        to: tmp.appendingPathComponent("technical-specifications/001-overview.md"),
+        atomically: true,
+        encoding: .utf8
+    )
+    try "# BR".write(to: biz.appendingPathComponent("001-reqs.md"), atomically: true, encoding: .utf8)
+    try "# Skip".write(to: biz.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
+
+    #expect(TemplateSections.usesVerticalLayout(at: tmp))
+
+    let files = try MarkdownSources.discoverContentFiles(in: tmp)
+    let rels = files.map { url -> String in
+        let path = url.path
+        let root = tmp.path + "/"
+        return path.hasPrefix(root) ? String(path.dropFirst(root.count)) : url.lastPathComponent
+    }
+
+    #expect(rels.contains("business-requirements/001-reqs.md"))
+    #expect(rels.contains("technical-specifications/001-overview.md"))
+    #expect(rels.contains("technical-specifications/login-screen/010-auth.md"))
+    #expect(!rels.contains { $0.lowercased().contains("readme") })
+
+    // business-requirements comes before technical-specifications in defaultOrder
+    let bizIdx = rels.firstIndex(of: "business-requirements/001-reqs.md")!
+    let techIdx = rels.firstIndex(of: "technical-specifications/001-overview.md")!
+    #expect(bizIdx < techIdx)
+
+    // Within technical-specifications, lex by relative path: 001-overview before login-screen/010-auth
+    let overviewIdx = rels.firstIndex(of: "technical-specifications/001-overview.md")!
+    let nestedIdx = rels.firstIndex(of: "technical-specifications/login-screen/010-auth.md")!
+    #expect(overviewIdx < nestedIdx)
+}
+
+@Test func discoverContentFilesFlatLayoutStillWorks() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-flat-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    try "# A".write(to: tmp.appendingPathComponent("002-b.md"), atomically: true, encoding: .utf8)
+    try "# B".write(to: tmp.appendingPathComponent("001-a.md"), atomically: true, encoding: .utf8)
+    try "# Skip".write(to: tmp.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
+
+    #expect(!TemplateSections.usesVerticalLayout(at: tmp))
+    let files = try MarkdownSources.discoverContentFiles(in: tmp)
+    #expect(files.map(\.lastPathComponent) == ["001-a.md", "002-b.md"])
+}
+
+@Test func defaultSkeletonOnDiskUsesVerticalFoldersAndRejected() throws {
+    // Resolve repo Skeleton via this test file path (resources live with Sources, not in test bundle).
+    let testsDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    let skeleton = testsDir
+        .deletingLastPathComponent() // Tests
+        .deletingLastPathComponent() // repo root
+        .appendingPathComponent("Sources/scs/Resources/Skeleton", isDirectory: true)
+
+    let fm = FileManager.default
+    var isDir: ObjCBool = false
+    #expect(fm.fileExists(atPath: skeleton.path, isDirectory: &isDir) && isDir.boolValue)
+
+    #expect(TemplateSections.usesVerticalLayout(at: skeleton))
+    for id in [
+        "business-requirements", "technical-glossary", "business-glossary",
+        "document-metadata", "appendices", "quality-attributes",
+        "external-interfaces", "technical-notes", "business-notes"
+    ] {
+        var sectionIsDir: ObjCBool = false
+        #expect(
+            fm.fileExists(atPath: skeleton.appendingPathComponent(id).path, isDirectory: &sectionIsDir)
+                && sectionIsDir.boolValue
+        )
+    }
+    #expect(fm.fileExists(atPath: skeleton.appendingPathComponent("document-metadata/document-revisions/001-revision-history.md").path))
+    #expect(fm.fileExists(atPath: skeleton.appendingPathComponent("appendices/tech-specs-to-business-reqs/001-tech-specs-to-business-reqs.md").path))
+    #expect(fm.fileExists(atPath: skeleton.appendingPathComponent("ADRs/000-adrs.md").path))
+    #expect(fm.fileExists(atPath: skeleton.appendingPathComponent("ADRs/rejected").path))
+    #expect(fm.fileExists(atPath: skeleton.appendingPathComponent("BDRs/rejected").path))
+    #expect(!fm.fileExists(atPath: skeleton.appendingPathComponent("001-document-metadata.md").path))
+
+    let files = try MarkdownSources.discoverContentFiles(in: skeleton)
+    #expect(files.count >= 15)
+    #expect(files.contains { $0.path.contains("business-requirements") })
+    #expect(files.contains { $0.path.hasSuffix("ADRs/000-adrs.md") })
+}

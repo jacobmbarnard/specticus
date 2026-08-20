@@ -1,3 +1,13 @@
+# Business Glossary
+
+Business and domain terms used in this specification.
+
+| Term | Definition |
+|------|------------|
+|      |            |
+
+
+<!-- Migrated notes from prior glossary template:
 # Glossary
 
 *A list of terms and their definitions used throughout this document.*
@@ -10,4 +20,5 @@
 | ADR           | Architecture Decision Record. |
 | Actor         | A user or external system that interacts with the system. |
 
-<!-- Add more terms. Consider splitting into Business Glossary and Technical Glossary in larger projects. -->
+<!-- Add more terms. Consider splitting into Business Glossary and Tec
+-->
