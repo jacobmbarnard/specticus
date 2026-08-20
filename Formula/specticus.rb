@@ -68,6 +68,6 @@ class Specticus < Formula
     # Bundle.module must resolve (regression for bin-only install).
     system bin/"scs", "init", "myspecs"
     assert_path_exists testpath/"myspecs/.specticus/config.yml"
-    assert_path_exists testpath/"myspecs/001-document-metadata.md"
+    assert_path_exists testpath/"myspecs/document-metadata/001-title-and-authors.md"
   end
 end
