@@ -14,7 +14,7 @@ class Specticus < Formula
 
   url "https://github.com/jacobmbarnard/specticus.git",
       tag:      "v0.2.1",
-      revision: "663feb57aa42cdecc60d1367fbcafa0b1cbbc046"
+      revision: "be428c6bdad1754d1b2e664a4d8ac36b11fe078d"
   version "0.2.1"
 
   head "https://github.com/jacobmbarnard/specticus.git", branch: "develop"
