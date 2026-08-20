@@ -181,7 +181,7 @@ echo "==> Smoke test"
 SMOKE="$(mktemp -d "${TMPDIR:-/tmp}/specticus-pkg.XXXXXX")"
 "${STAGE}/bin/scs" init "${SMOKE}/demo"
 test -f "${SMOKE}/demo/.specticus/config.yml"
-test -f "${SMOKE}/demo/001-document-metadata.md"
+test -f "${SMOKE}/demo/document-metadata/001-title-and-authors.md"
 rm -rf "${SMOKE}"
 echo "    init OK"
 
