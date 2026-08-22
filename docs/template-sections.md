@@ -42,10 +42,29 @@ ADRs/
 Same shape for `BDRs/`. Prefer `000-adrs.md` / `000-bdrs.md` (not `README.md`) so
 assembly includes the header (`README*` is skipped as content).
 
-## Assembly today
+## Assembly order (#140)
 
-Until layout config (#140): sections follow the pack order above; within a
-section, files are ordered lexicographically by **relative path**.
+Defaults ship in `.specticus/layout.yml` (copied by `scs init`).
+
+- **Section order:** `order` integers (lower first). Pack default follows the
+  table above.
+- **Per-section file sort** (`sort`) on paths relative to that section folder:
+  - `lexical` — string sort
+  - `reverse_lexical` — reverse string sort
+  - `alphanumeric` — natural sort (`9-…` before `10-…`) — **default**
+
+Override in `layout.yml` or under `assembly.sections` in `config.yml`:
+
+```yaml
+assembly:
+  sections:
+    - id: appendices
+      order: 900
+      sort: alphanumeric
+    - id: technical-specifications
+      order: 5
+      sort: reverse_lexical
+```
 
 **Legacy:** projects with only flat root `00N-*.md` files still assemble (no
 section folders detected).

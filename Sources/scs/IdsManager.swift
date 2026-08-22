@@ -201,7 +201,10 @@ enum IdsManager {
             project.config.ids.headingMaxLevel
         )
         let minLevel = SpecticusConfig.IdsSection.minHeadingLevel
-        let mdFiles = try MarkdownSources.discoverContentFiles(in: project.root)
+        let mdFiles = try MarkdownSources.discoverContentFiles(
+            in: project.root,
+            layout: project.assemblyLayout
+        )
 
         var observations: [HeadingObservation] = []
 

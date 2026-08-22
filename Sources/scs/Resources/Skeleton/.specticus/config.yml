@@ -60,3 +60,14 @@ ids:
   # Snake_case aliases content_strict / content_strict_plus also accepted.
   # Markdown formatting in headings (**bold**, *italic*, `code`, links, HTML) is never allowed.
   drift_sensitivity: strict
+
+# Assembly layout (#140) — optional overrides (pack defaults live in layout.yml).
+# Reorder verticals or change per-section file sort:
+# assembly:
+#   sections:
+#     - id: appendices
+#       order: 900
+#       sort: alphanumeric
+#     - id: technical-specifications
+#       order: 10
+#       sort: reverse_lexical

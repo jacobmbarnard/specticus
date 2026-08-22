@@ -25,6 +25,8 @@ struct SpecticusProject: Sendable {
 
     static let hiddenDirectoryName = ".specticus"
     static let configFileName = "config.yml"
+    /// Pack / project assembly layout defaults (#140). Merged under `config.assembly`.
+    static let layoutFileName = "layout.yml"
     static let titleFileName = "title.yml"
     static let idsFileName = "ids.json"  // stores BR1, TS2, ADR3 etc. (simple prefix+integer)
     /// Append-only audit log for deliberate ID rebinds (`ids accept-drift`, #66).
@@ -39,8 +41,21 @@ struct SpecticusProject: Sendable {
         specticusDirectory.appendingPathComponent(Self.configFileName)
     }
 
+    var layoutURL: URL {
+        specticusDirectory.appendingPathComponent(Self.layoutFileName)
+    }
+
     var titleURL: URL {
         root.appendingPathComponent(Self.titleFileName)
+    }
+
+    /// Resolved assembly layout: pack default ⊕ `.specticus/layout.yml` ⊕ `config.assembly` (#140).
+    var assemblyLayout: AssemblyLayout {
+        let layoutFile: URL? = FileManager.default.fileExists(atPath: layoutURL.path) ? layoutURL : nil
+        return AssemblyLayout.loadMerged(
+            layoutFileURL: layoutFile,
+            configOverrides: config.assembly.sections
+        )
     }
 
     var idsURL: URL {

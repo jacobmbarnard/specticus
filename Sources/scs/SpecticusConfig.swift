@@ -11,6 +11,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
     var build: BuildSection
     var decisionRecords: DecisionRecordsSection
     var ids: IdsSection
+    /// Optional assembly layout overrides (#140). Merged onto pack defaults / layout.yml.
+    var assembly: AssemblyConfigSection
 
     enum CodingKeys: String, CodingKey {
         case version
@@ -18,6 +20,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         case build
         case decisionRecords = "decision_records"
         case ids
+        case assembly
     }
 
     init(
@@ -25,13 +28,15 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         project: ProjectSection = ProjectSection(),
         build: BuildSection = BuildSection(),
         decisionRecords: DecisionRecordsSection = DecisionRecordsSection(),
-        ids: IdsSection = IdsSection()
+        ids: IdsSection = IdsSection(),
+        assembly: AssemblyConfigSection = AssemblyConfigSection()
     ) {
         self.version = version
         self.project = project
         self.build = build
         self.decisionRecords = decisionRecords
         self.ids = ids
+        self.assembly = assembly
     }
 
     init(from decoder: Decoder) throws {
@@ -42,9 +47,29 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         decisionRecords = try container.decodeIfPresent(DecisionRecordsSection.self, forKey: .decisionRecords)
             ?? DecisionRecordsSection()
         ids = try container.decodeIfPresent(IdsSection.self, forKey: .ids) ?? IdsSection()
+        assembly = try container.decodeIfPresent(AssemblyConfigSection.self, forKey: .assembly)
+            ?? AssemblyConfigSection()
     }
 
     static let `default` = SpecticusConfig()
+
+    /// User overrides under `assembly:` in config.yml (#140).
+    struct AssemblyConfigSection: Codable, Equatable, Sendable {
+        var sections: [AssemblySectionSpec]
+
+        init(sections: [AssemblySectionSpec] = []) {
+            self.sections = sections
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            sections = try c.decodeIfPresent([AssemblySectionSpec].self, forKey: .sections) ?? []
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case sections
+        }
+    }
 
     // MARK: Nested sections
 

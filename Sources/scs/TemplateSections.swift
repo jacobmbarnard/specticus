@@ -2,8 +2,8 @@ import Foundation
 
 // MARK: - Default Path A section verticals (#139)
 
-/// Stable top-level section folder ids for the default template pack.
-/// Assembly order until #140 lands: this array order, then lex paths within each section.
+/// Stable top-level section folder ids for the default template pack (#139).
+/// Default assembly order/sort come from `AssemblyLayout.packDefault` (#140).
 enum TemplateSections {
     /// Default verticals in Path A narrative order (folder names under project root).
     static let defaultOrder: [String] = [

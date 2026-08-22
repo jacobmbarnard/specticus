@@ -30,17 +30,25 @@ enum MarkdownSources {
 
     /// Discover content Markdown files for assembly / ID scan.
     ///
-    /// - Vertical projects (#139): section folders in `TemplateSections.defaultOrder`,
-    ///   recursive under each; then any remaining root-level content files (hybrid compat).
-    /// - Flat projects: top-level content files only (legacy #3 / #35).
+    /// - Vertical projects (#139/#140): section folders per `layout` order + per-section sort;
+    ///   then any remaining root-level content files (hybrid compat).
+    /// - Flat projects: top-level content files only (legacy #3 / #35), sorted with
+    ///   the first section's policy if provided, else alphanumeric.
     ///
     /// Does **not** apply single-file mode or welcome-template fallback — callers handle that.
-    static func discoverContentFiles(in directory: URL) throws -> [URL] {
+    static func discoverContentFiles(
+        in directory: URL,
+        layout: AssemblyLayout = .packDefault
+    ) throws -> [URL] {
         let root = directory.standardizedFileURL
         if TemplateSections.usesVerticalLayout(at: root) {
-            return try discoverVerticalContentFiles(in: root)
+            return try discoverVerticalContentFiles(in: root, layout: layout)
         }
-        return try discoverFlatContentFiles(in: root)
+        let flat = try discoverFlatContentFiles(in: root)
+        let policy = layout.sections.first?.sort ?? .alphanumeric
+        return flat.sorted {
+            AssemblyLayout.comparePaths($0.lastPathComponent, $1.lastPathComponent, policy: policy)
+        }
     }
 
     /// Legacy: top-level `*.md` only, lex by filename.
@@ -56,8 +64,11 @@ enum MarkdownSources {
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
     }
 
-    /// Vertical pack: ordered sections + recursive files, then leftover root files.
-    static func discoverVerticalContentFiles(in directory: URL) throws -> [URL] {
+    /// Vertical pack: layout-ordered sections + recursive files, then leftover root files.
+    static func discoverVerticalContentFiles(
+        in directory: URL,
+        layout: AssemblyLayout = .packDefault
+    ) throws -> [URL] {
         let fm = FileManager.default
         let root = directory.standardizedFileURL
         var ordered: [URL] = []
@@ -70,28 +81,46 @@ enum MarkdownSources {
             }
         }
 
-        for sectionID in TemplateSections.defaultOrder {
+        // Prefer layout order; append any default-pack sections missing from layout (safety).
+        var sectionIDs = layout.orderedSectionIDs
+        for id in TemplateSections.defaultOrder where !sectionIDs.contains(id) {
+            sectionIDs.append(id)
+        }
+
+        for sectionID in sectionIDs {
             let sectionURL = root.appendingPathComponent(sectionID, isDirectory: true)
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: sectionURL.path, isDirectory: &isDir), isDir.boolValue else {
                 continue
             }
-            let found = try collectMarkdownRecursively(under: sectionURL, projectRoot: root)
+            let policy = layout.sortPolicy(forSectionID: sectionID)
+            let found = try collectMarkdownRecursively(
+                under: sectionURL,
+                projectRoot: root,
+                sortPolicy: policy
+            )
             for url in found {
                 appendUnique(url)
             }
         }
 
         // Hybrid: root-level content Markdown not already collected (migration / extras).
-        for url in try discoverFlatContentFiles(in: root) {
+        let rootPolicy = layout.sections.first?.sort ?? .alphanumeric
+        for url in try discoverFlatContentFiles(in: root).sorted(by: {
+            AssemblyLayout.comparePaths($0.lastPathComponent, $1.lastPathComponent, policy: rootPolicy)
+        }) {
             appendUnique(url)
         }
 
         return ordered
     }
 
-    /// Recursively collect content Markdown under `directory`, sorted by relative path (lex).
-    static func collectMarkdownRecursively(under directory: URL, projectRoot: URL) throws -> [URL] {
+    /// Recursively collect content Markdown under `directory`, sorted by relative path + policy.
+    static func collectMarkdownRecursively(
+        under directory: URL,
+        projectRoot: URL,
+        sortPolicy: AssemblySortPolicy = .lexical
+    ) throws -> [URL] {
         let fm = FileManager.default
         guard let enumerator = fm.enumerator(
             at: directory,
@@ -112,8 +141,14 @@ enum MarkdownSources {
         }
 
         let rootPath = projectRoot.standardizedFileURL.path
+        let sectionPath = directory.standardizedFileURL.path
         return found.sorted { a, b in
-            relativePath(a, from: rootPath) < relativePath(b, from: rootPath)
+            // Sort by path relative to the section root (stable nested feature folders).
+            let ra = relativePath(a, from: sectionPath)
+            let rb = relativePath(b, from: sectionPath)
+            if AssemblyLayout.comparePaths(ra, rb, policy: sortPolicy) { return true }
+            if AssemblyLayout.comparePaths(rb, ra, policy: sortPolicy) { return false }
+            return relativePath(a, from: rootPath) < relativePath(b, from: rootPath)
         }
     }
 

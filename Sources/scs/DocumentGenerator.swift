@@ -105,7 +105,8 @@ struct DocumentGenerator {
     static func assembleSources(
         input: String? = nil,
         baseDirectory: String = ".",
-        fallbackInput: String? = nil
+        fallbackInput: String? = nil,
+        layout: AssemblyLayout = .packDefault
     ) throws -> String {
         let fm = FileManager.default
         let baseURL = URL(fileURLWithPath: baseDirectory)
@@ -118,8 +119,8 @@ struct DocumentGenerator {
             return try String(contentsOf: inputURL, encoding: .utf8)
         }
 
-        // Multi-file discovery (#35): shared with IdsManager.collectHeadings via MarkdownSources.
-        let mdFiles = try MarkdownSources.discoverContentFiles(in: baseURL)
+        // Multi-file discovery (#35 / #139 / #140): shared with IdsManager via MarkdownSources.
+        let mdFiles = try MarkdownSources.discoverContentFiles(in: baseURL, layout: layout)
 
         if mdFiles.isEmpty {
             // Config-driven fallback, then legacy welcome-template.md
