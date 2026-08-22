@@ -3109,3 +3109,90 @@ private func makeLifecycleFixture(
     #expect(files.contains { $0.path.contains("business-requirements") })
     #expect(files.contains { $0.path.hasSuffix("ADRs/000-adrs.md") })
 }
+
+// MARK: - Assembly layout (#140)
+
+@Test func alphanumericSortPutsNineBeforeTen() {
+    #expect(AssemblyLayout.compareAlphanumeric("section/9-x.md", "section/10-x.md"))
+    #expect(!AssemblyLayout.compareAlphanumeric("section/10-x.md", "section/9-x.md"))
+    #expect(AssemblyLayout.comparePaths("a/9-b.md", "a/10-b.md", policy: .alphanumeric))
+    #expect(AssemblyLayout.comparePaths("b.md", "a.md", policy: .reverseLexical))
+    #expect(AssemblyLayout.comparePaths("a.md", "b.md", policy: .lexical))
+}
+
+@Test func assemblyLayoutMergeOverridesOrderAndSort() {
+    let base = AssemblyLayout.packDefault
+    let merged = AssemblyLayout.merge(
+        base: base,
+        overrides: [
+            AssemblySectionSpec(id: "appendices", order: -10, sort: .reverseLexical),
+            AssemblySectionSpec(id: "custom-vertical", order: -5, sort: .lexical),
+        ]
+    )
+    #expect(merged.orderedSectionIDs.first == "appendices")
+    #expect(merged.sortPolicy(forSectionID: "appendices") == .reverseLexical)
+    #expect(merged.orderedSectionIDs.contains("custom-vertical"))
+    #expect(merged.unknownSectionIDs.contains("custom-vertical"))
+}
+
+@Test func assemblyLayoutParsesFromConfigYAML() throws {
+    let yaml = """
+    version: 1
+    assembly:
+      sections:
+        - id: technical-specifications
+          order: 0
+          sort: reverse_lexical
+        - id: business-requirements
+          order: 10
+          sort: alphanumeric
+    """
+    let config = try SpecticusConfig.parse(yaml: yaml)
+    #expect(config.assembly.sections.count == 2)
+    #expect(config.assembly.sections[0].id == "technical-specifications")
+    #expect(config.assembly.sections[0].sort == .reverseLexical)
+}
+
+@Test func discoverRespectsSectionOrderOverride() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-layout-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let tech = tmp.appendingPathComponent("technical-specifications", isDirectory: true)
+    let biz = tmp.appendingPathComponent("business-requirements", isDirectory: true)
+    try fm.createDirectory(at: tech, withIntermediateDirectories: true)
+    try fm.createDirectory(at: biz, withIntermediateDirectories: true)
+    try "# TS".write(to: tech.appendingPathComponent("001.md"), atomically: true, encoding: .utf8)
+    try "# BR".write(to: biz.appendingPathComponent("001.md"), atomically: true, encoding: .utf8)
+
+    let layout = AssemblyLayout(sections: [
+        AssemblySectionSpec(id: "technical-specifications", order: 0, sort: .alphanumeric),
+        AssemblySectionSpec(id: "business-requirements", order: 10, sort: .alphanumeric),
+    ])
+    let files = try MarkdownSources.discoverContentFiles(in: tmp, layout: layout)
+    let rels = files.map { $0.path.replacingOccurrences(of: tmp.path + "/", with: "") }
+    #expect(rels.first == "technical-specifications/001.md")
+    #expect(rels.contains("business-requirements/001.md"))
+}
+
+@Test func discoverAlphanumericWithinSection() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-alnum-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let tech = tmp.appendingPathComponent("technical-specifications", isDirectory: true)
+    try fm.createDirectory(at: tech, withIntermediateDirectories: true)
+    try "# 10".write(to: tech.appendingPathComponent("10-later.md"), atomically: true, encoding: .utf8)
+    try "# 9".write(to: tech.appendingPathComponent("9-earlier.md"), atomically: true, encoding: .utf8)
+
+    let layout = AssemblyLayout(sections: [
+        AssemblySectionSpec(id: "technical-specifications", order: 0, sort: .alphanumeric),
+    ])
+    let files = try MarkdownSources.discoverContentFiles(in: tmp, layout: layout)
+    let names = files.map(\.lastPathComponent)
+    #expect(names == ["9-earlier.md", "10-later.md"])
+}

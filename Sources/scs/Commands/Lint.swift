@@ -99,10 +99,46 @@ struct Lint: ParsableCommand {
         // --- Markdown content (#139 vertical folders or legacy flat 00N-*.md)
         let discovered: [URL]
         do {
-            discovered = try MarkdownSources.discoverContentFiles(in: rootURL)
+            discovered = try MarkdownSources.discoverContentFiles(
+                in: rootURL,
+                layout: project.assemblyLayout
+            )
         } catch {
             discovered = []
             warn("Could not discover Markdown content: \(error.localizedDescription)")
+        }
+
+        // Assembly layout (#140)
+        let layout = project.assemblyLayout
+        let dupOrders = layout.duplicateOrders
+        if !dupOrders.isEmpty {
+            warn(
+                "Assembly layout has duplicate order values: \(dupOrders.map(String.init).joined(separator: ", "))",
+                suggestion: "Give each assembly.sections[].order a unique integer in config.yml or layout.yml (#140)."
+            )
+        }
+        for id in layout.unknownSectionIDs {
+            warn(
+                "Assembly layout references unknown section id '\(id)'",
+                suggestion: "Use a default pack folder id (see docs/template-sections.md) or create that folder."
+            )
+        }
+        if usesVertical {
+            for spec in layout.sections {
+                let sectionPath = rootURL.appendingPathComponent(spec.id, isDirectory: true).path
+                var isDir: ObjCBool = false
+                if !fm.fileExists(atPath: sectionPath, isDirectory: &isDir) || !isDir.boolValue {
+                    // Only warn for ids that were explicitly overridden / listed beyond missing defaults
+                    if project.config.assembly.sections.contains(where: { $0.id == spec.id })
+                        || FileManager.default.fileExists(atPath: project.layoutURL.path)
+                    {
+                        warn(
+                            "Assembly section '\(spec.id)' (order \(spec.order)) has no folder on disk",
+                            suggestion: "Create \(spec.id)/ or remove it from assembly layout (#140)."
+                        )
+                    }
+                }
+            }
         }
 
         if usesVertical {
@@ -189,12 +225,13 @@ struct Lint: ParsableCommand {
             _ = try DocumentGenerator.assembleSources(
                 input: nil,
                 baseDirectory: cwd,
-                fallbackInput: project.config.build.defaultInput
+                fallbackInput: project.config.build.defaultInput,
+                layout: project.assemblyLayout
             )
-            ok("Markdown sources assemble successfully (lex order or single file)")
+            ok("Markdown sources assemble successfully (layout order / single file)")
         } catch {
             fail("Markdown sources failed to assemble",
-                 suggestion: "Run with a specific --input or ensure numbered .md files (or welcome-template.md) are present and readable. Error: \(error.localizedDescription)")
+                 suggestion: "Ensure section folders or Markdown files are present, or pass --input. Error: \(error.localizedDescription)")
         }
 
         // --- Traceability IDs (#6 / #36 / #38)

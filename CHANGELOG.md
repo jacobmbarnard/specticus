@@ -10,6 +10,10 @@ as described in [docs/release-process.md](docs/release-process.md).
 
 ### Added
 
+- Assembly layout config (#140): `.specticus/layout.yml` + optional
+  `assembly.sections` in config.yml for section order and per-folder sort
+  (`lexical`, `reverse_lexical`, `alphanumeric`)
+
 ### Changed
 
 ### Fixed

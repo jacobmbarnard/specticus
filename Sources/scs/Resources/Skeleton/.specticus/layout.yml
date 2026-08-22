@@ -1,0 +1,84 @@
+# Default assembly layout for the Path A pack (#140).
+# Copied by `scs init` into `.specticus/layout.yml`.
+# Override section `order` / `sort` here or under `assembly:` in config.yml.
+# sort: lexical | reverse_lexical | alphanumeric (natural: 9 before 10)
+
+sections:
+  - id: document-metadata
+    order: 0
+    sort: alphanumeric
+  - id: system-overview
+    order: 10
+    sort: alphanumeric
+  - id: stakeholders-and-scope
+    order: 20
+    sort: alphanumeric
+  - id: business-notes
+    order: 30
+    sort: alphanumeric
+  - id: technical-notes
+    order: 40
+    sort: alphanumeric
+  - id: assumptions-and-open-questions
+    order: 50
+    sort: alphanumeric
+  - id: business-constraints
+    order: 60
+    sort: alphanumeric
+  - id: technical-constraints
+    order: 70
+    sort: alphanumeric
+  - id: business-requirements
+    order: 80
+    sort: alphanumeric
+  - id: technical-specifications
+    order: 90
+    sort: alphanumeric
+  - id: quality-attributes
+    order: 100
+    sort: alphanumeric
+  - id: external-interfaces
+    order: 110
+    sort: alphanumeric
+  - id: data-and-privacy
+    order: 120
+    sort: alphanumeric
+  - id: security-and-access
+    order: 130
+    sort: alphanumeric
+  - id: use-cases
+    order: 140
+    sort: alphanumeric
+  - id: test-plan
+    order: 150
+    sort: alphanumeric
+  - id: operational-concerns
+    order: 160
+    sort: alphanumeric
+  - id: risks-and-tradeoffs
+    order: 170
+    sort: alphanumeric
+  - id: compliance-and-controls
+    order: 180
+    sort: alphanumeric
+  - id: business-glossary
+    order: 190
+    sort: alphanumeric
+  - id: technical-glossary
+    order: 200
+    sort: alphanumeric
+  - id: references
+    order: 210
+    sort: alphanumeric
+  - id: diagrams
+    order: 220
+    sort: alphanumeric
+  - id: ADRs
+    order: 230
+    sort: alphanumeric
+  - id: BDRs
+    order: 240
+    sort: alphanumeric
+  - id: appendices
+    order: 250
+    sort: alphanumeric

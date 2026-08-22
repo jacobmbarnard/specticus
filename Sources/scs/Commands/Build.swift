@@ -67,7 +67,8 @@ struct Build: ParsableCommand {
         var markdown = try DocumentGenerator.assembleSources(
             input: input,
             baseDirectory: project.root.path,
-            fallbackInput: project.config.build.defaultInput
+            fallbackInput: project.config.build.defaultInput,
+            layout: project.assemblyLayout
         )
 
         // Hierarchical section numbers (#4) — independent of traceability IDs (#6).
