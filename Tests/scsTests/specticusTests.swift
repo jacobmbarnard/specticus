@@ -3337,3 +3337,29 @@ private func makeLifecycleFixture(
     #expect(brMD.contains("## BR1: User Login"))
     #expect(brMD.contains("## BR2: View Dashboard"))
 }
+
+// MARK: - Style packs (#141) — step 1
+
+@Test func stylePackRegistryIncludesDefault() throws {
+    #expect(StylePackRegistry.pack(id: "default") != nil)
+    #expect(StylePackRegistry.pack(id: "DEFAULT")?.id == "default")
+    #expect(StylePackRegistry.pack(id: "nope") == nil)
+    let url = try StylePackRegistry.skeletonURL(forPackID: "default")
+    #expect(url.lastPathComponent == "Skeleton" || url.path.contains("Skeleton"))
+}
+
+@Test func configParsesDocStyle() throws {
+    let yaml = """
+    version: 1
+    doc:
+      style: default
+    """
+    let config = try SpecticusConfig.parse(yaml: yaml)
+    #expect(config.doc.style == "default")
+}
+
+@Test func configDefaultsDocStyleWhenMissing() throws {
+    let yaml = "version: 1\n"
+    let config = try SpecticusConfig.parse(yaml: yaml)
+    #expect(config.doc.style == StylePackRegistry.defaultPackID)
+}
