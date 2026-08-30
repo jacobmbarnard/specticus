@@ -72,6 +72,8 @@ enum IdsManager {
         case noPrefixInferred
         /// Title looks like an ID attempt but does not match owning-ID syntax (#31).
         case unrecognizedIDForm(detail: String)
+        /// Section / vertical chrome (e.g. `# Business Requirements`) — not a requirement owner.
+        case structuralSectionTitle
 
         var shortLabel: String {
             switch self {
@@ -89,6 +91,8 @@ enum IdsManager {
                 return "no ID prefix could be inferred (title, filename, or sibling IDs)"
             case .unrecognizedIDForm(let detail):
                 return detail
+            case .structuralSectionTitle:
+                return "structural section / vertical title (not an ID owner)"
             }
         }
 
@@ -109,6 +113,8 @@ enum IdsManager {
                 return "Write a manual ID (`## BR1: Title`), use a keyword (requirement, specification, use case, …), or put the heading in a section file (e.g. 007-business-requirements.md)."
             case .unrecognizedIDForm:
                 return "Owning form is `## BR1: Title` — PREFIX + digits (no dash, no zero-padding), then `:` / `.` / space. Known prefixes: \(knownPrefixes.joined(separator: ", "))."
+            case .structuralSectionTitle:
+                return "Leave the section title without an ID. Put owning IDs on child requirement headings (e.g. `## BR1: User Login` under Business Requirements)."
             }
         }
     }
@@ -658,6 +664,11 @@ enum IdsManager {
             if let detail = diagnoseUnrecognizedIDForm(in: cleanedTitle) {
                 // Do not inject a second ID on top of a near-miss form like `BR-001: …`.
                 assignSkips.append((h, .unrecognizedIDForm(detail: detail)))
+                continue
+            }
+            // Section / vertical chrome (`# Business Requirements`) must not receive owning IDs.
+            if isStructuralSectionTitle(cleanedTitle, file: h.file) {
+                assignSkips.append((h, .structuralSectionTitle))
                 continue
             }
             guard let prefix = resolvePrefix(for: h, fileContextPrefix: fileContextPrefix[h.file]) else {
@@ -1724,8 +1735,122 @@ enum IdsManager {
         return result
     }
 
+    // MARK: - Structural section titles (skip auto-assign)
+
+    /// Known Path A / skeleton vertical titles and common aliases (normalized).
+    /// These are document chrome, not requirement owners.
+    private static let structuralSectionTitles: Set<String> = {
+        var titles: Set<String> = [
+            "document metadata",
+            "document revisions",
+            "system overview",
+            "stakeholders and scope",
+            "business need elicitation notes",
+            "business notes",
+            "technical notes",
+            "assumptions and open questions",
+            "business constraints",
+            "technical constraints",
+            "business requirements",
+            "technical specifications",
+            "quality attributes",
+            "external interfaces",
+            "data and privacy",
+            "security and access",
+            "use cases",
+            "test plan",
+            "test cases",
+            "operational concerns",
+            "risks and tradeoffs",
+            "compliance and controls",
+            "business glossary",
+            "technical glossary",
+            "glossary",
+            "references",
+            "diagrams",
+            "overarching system diagrams",
+            "overarching diagrams",
+            "architecture decision records",
+            "business decision records",
+            "appendices",
+            "technical specifications business requirements",
+            "requirements",
+            "specifications",
+            "constraints",
+            "overview",
+        ]
+        for folder in TemplateSections.defaultOrder {
+            titles.insert(normalizeHeadingTitle(humanizePathComponent(folder)))
+        }
+        return titles
+    }()
+
+    /// Whether this heading is section/vertical chrome and must not receive an auto-assigned ID.
+    ///
+    /// Matches known skeleton titles and titles that merely restate the section folder / file stem
+    /// (e.g. `# Business Requirements` in `business-requirements/001-….md`).
+    static func isStructuralSectionTitle(_ title: String, file: URL) -> Bool {
+        let normalized = normalizeHeadingTitle(HeadingNumberer.stripOutlinePrefix(from: title))
+        guard !normalized.isEmpty else { return false }
+        if structuralSectionTitles.contains(normalized) {
+            return true
+        }
+        let parent = humanizePathComponent(file.deletingLastPathComponent().lastPathComponent)
+        if !parent.isEmpty, normalized == normalizeHeadingTitle(parent) {
+            return true
+        }
+        let stem = humanizePathComponent(file.deletingPathExtension().lastPathComponent)
+        if !stem.isEmpty, normalized == normalizeHeadingTitle(stem) {
+            return true
+        }
+        return false
+    }
+
+    /// `business-requirements` / `001-business-requirements` → `business requirements`.
+    static func humanizePathComponent(_ name: String) -> String {
+        var base = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let dot = base.lastIndex(of: "."), base[dot...] == ".md" || base.hasSuffix(".markdown") {
+            base = String(base[..<dot])
+        }
+        // Strip leading outline-style file numbers: `001-`, `0001-`.
+        if let range = base.range(of: #"^\d+-"#, options: .regularExpression) {
+            base = String(base[range.upperBound...])
+        }
+        return base
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: "/", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Lowercase, strip light punctuation, collapse whitespace for title comparisons.
+    static func normalizeHeadingTitle(_ text: String) -> String {
+        var s = text.lowercased()
+        s = s.replacingOccurrences(of: "→", with: " ")
+        s = s.replacingOccurrences(of: "—", with: " ")
+        s = s.replacingOccurrences(of: "–", with: " ")
+        var scaled = ""
+        scaled.reserveCapacity(s.count)
+        for ch in s {
+            if ch.isLetter || ch.isNumber {
+                scaled.append(ch)
+            } else if ch.isWhitespace || ch == "-" || ch == "_" {
+                scaled.append(" ")
+            }
+            // drop other punctuation
+        }
+        return scaled
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
+    }
+
     /// Infer prefix from heading descriptive text only (not filenames).
     private static func inferPrefixFromContent(_ text: String) -> String? {
+        // Exact section titles are not content keywords (assign also skips these structurally).
+        let normalized = normalizeHeadingTitle(HeadingNumberer.stripOutlinePrefix(from: text))
+        if structuralSectionTitles.contains(normalized) {
+            return nil
+        }
         let lower = text.lowercased()
 
         if lower.contains("business requirement") || lower.contains("requirement") || lower.contains("shall ") {
