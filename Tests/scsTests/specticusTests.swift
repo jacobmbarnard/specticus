@@ -572,7 +572,69 @@ import Foundation
     let html = try DocumentGenerator.generateHTML(from: numbered, title: "T", tocMaxLevel: 0)
     #expect(html.contains("1. Doc") || html.contains("1. Doc"))
     #expect(html.contains("BR7"))
-    #expect(html.contains("1.1.") || html.contains("1.1. BR7"))
+    #expect(html.contains("1.1.") || html.contains("1.1. The system shall"))
+    // Owning ID demoted to chip — not left as `BR7:` inside the heading (#149)
+    #expect(html.contains("class=\"scs-id-chip\""))
+    #expect(!html.contains(">1.1. BR7:"))
+}
+
+// MARK: - Traceability chips (#149 / #42)
+
+@Test func traceabilityChipsPartsSplitOutlineAndID() {
+    let withBoth = TraceabilityChips.parts(from: "1.1. BR1: User Login")
+    #expect(withBoth.outlinePrefix == "1.1. ")
+    #expect(withBoth.owningID == "BR1")
+    #expect(withBoth.titleText == "User Login")
+    #expect(withBoth.visibleHeadingText == "1.1. User Login")
+
+    let idOnly = TraceabilityChips.parts(from: "BR2: Dashboard")
+    #expect(idOnly.outlinePrefix.isEmpty)
+    #expect(idOnly.owningID == "BR2")
+    #expect(idOnly.titleText == "Dashboard")
+
+    let plain = TraceabilityChips.parts(from: "1.2. Overview")
+    #expect(plain.owningID == nil)
+    #expect(plain.visibleHeadingText == "1.2. Overview")
+}
+
+@Test func traceabilityChipsDemoteInHTML() throws {
+    let md = """
+    # Requirements
+    ## BR1: User Login
+    ## Plain Section
+    The user shall reference BR1 in prose without a chip.
+    """
+    let numbered = HeadingNumberer.numberHeadings(in: md, maxLevel: 3)
+    let html = try DocumentGenerator.generateHTML(from: numbered, title: "T", tocMaxLevel: 3)
+
+    #expect(html.contains("data-scs-id=\"BR1\""))
+    #expect(html.contains("class=\"scs-id-chip\""))
+    #expect(html.contains("<span class=\"scs-id\">BR1</span>"))
+    #expect(html.contains(">1.1. User Login</h2>"))
+    #expect(!html.contains("BR1: User Login"))
+    #expect(html.contains("id=\"br1\""))
+    // TOC: human title only (no owning-ID prefix in the link label)
+    #expect(html.contains("class=\"toc\""))
+    #expect(html.contains("href=\"#br1\">1.1. User Login</a>")
+            || html.contains("href=\"#br1\">User Login</a>"))
+    #expect(!html.contains("href=\"#br1\">BR1:"))
+    #expect(!html.contains("href=\"#br1\">1.1. BR1"))
+    // Body mention stays prose (not wrapped in a chip)
+    #expect(html.contains("reference BR1 in prose"))
+    #expect(html.contains("Plain Section"))
+}
+
+@Test func traceabilityChipsPreferIDAnchorAndCleanTOC() {
+    let md = """
+    ## BR9: Authentication
+    ## No ID Here
+    """
+    let headings = TableOfContents.extractHeadings(from: md, maxLevel: 3)
+    #expect(headings.count == 2)
+    #expect(headings[0].text == "Authentication")
+    #expect(headings[0].id == "br9")
+    #expect(headings[1].text == "No ID Here")
+    #expect(headings[1].id != "br9")
 }
 
 // MARK: - Table of contents (#12)

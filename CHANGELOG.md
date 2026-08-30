@@ -13,6 +13,9 @@ as described in [docs/release-process.md](docs/release-process.md).
 - Assembly layout config (#140): `.specticus/layout.yml` + optional
   `assembly.sections` in config.yml for section order and per-folder sort
   (`lexical`, `reverse_lexical`, `alphanumeric`)
+- HTML traceability chips (#149 / #42): owning IDs (`## BR1: Title`) stay in
+  source Markdown but render as muted chips under human heading titles; TOC
+  omits IDs; anchors prefer lowercase ID slugs (`br1`)
 
 ### Changed
 

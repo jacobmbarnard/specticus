@@ -9,6 +9,7 @@ import ArgumentParser
 // Expanded for #9: stylesheet href is typically a path under the structured output tree.
 // Expanded for #4: heading auto-numbering applied to Markdown before HTML (see HeadingNumberer).
 // Expanded for #12: hyperlinked TOC + heading anchors (see TableOfContents).
+// Expanded for #149: owning traceability IDs demoted to HTML chips (see TraceabilityChips).
 
 
 struct DocumentGenerator {
@@ -25,7 +26,8 @@ struct DocumentGenerator {
             bodyHTML: rawBody,
             maxLevel: tocMaxLevel
         )
-        let bodyHTML = tocApplied.bodyHTML
+        // Chips after TOC anchors so `id` stays on the heading; chip sits below (#42 / #149).
+        let bodyHTML = TraceabilityChips.demoteOwningIDs(in: tocApplied.bodyHTML)
         let tocHTML = tocApplied.tocHTML
         let hasTOC = !tocHTML.isEmpty
         let sidebarTOC = hasTOC
