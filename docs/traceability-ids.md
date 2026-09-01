@@ -69,6 +69,8 @@ Only a **leading** ID owns the heading:
 
 You can always write the ID yourself (`## TS4: …`) before running assign.
 
+**Section / vertical titles are not owners.** Headings that are document chrome — e.g. `# Business Requirements`, `# Technical Specifications`, or a title that only restates the section folder name — are **skipped** by `ids assign`. Put owning IDs on the child headings under them (`## User Login` → `## BR1: User Login`). Skips show up in assign feedback as “structural section / vertical title.”
+
 ---
 
 ## Happy-path workflow (solo or small team)

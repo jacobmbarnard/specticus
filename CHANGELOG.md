@@ -18,6 +18,10 @@ as described in [docs/release-process.md](docs/release-process.md).
 
 ### Fixed
 
+- `ids assign` no longer mints owning IDs on structural section / vertical
+  titles (e.g. `# Business Requirements`, `# Technical Specifications`) (#151);
+  child requirement headings still get IDs as before
+
 ## [0.2.1] - 2026-08-19
 
 Vertical default template layout, grayscale HTML theme, and README release badges.

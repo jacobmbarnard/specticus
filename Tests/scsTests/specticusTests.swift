@@ -3196,3 +3196,82 @@ private func makeLifecycleFixture(
     let names = files.map(\.lastPathComponent)
     #expect(names == ["9-earlier.md", "10-later.md"])
 }
+
+// MARK: - Skip structural section titles on ids assign
+
+@Test func structuralSectionTitleDetection() {
+    let brFile = URL(fileURLWithPath: "/proj/business-requirements/001-business-requirements.md")
+    #expect(IdsManager.isStructuralSectionTitle("Business Requirements", file: brFile))
+    #expect(IdsManager.isStructuralSectionTitle("1. Business Requirements", file: brFile))
+    #expect(IdsManager.isStructuralSectionTitle("Technical Specifications", file: brFile))
+    #expect(IdsManager.isStructuralSectionTitle("Use Cases", file: brFile))
+    #expect(!IdsManager.isStructuralSectionTitle("User Login", file: brFile))
+    #expect(!IdsManager.isStructuralSectionTitle("The system shall authenticate users", file: brFile))
+
+    // Title that only restates the folder / file stem
+    let custom = URL(fileURLWithPath: "/proj/my-feature-area/001-my-feature-area.md")
+    #expect(IdsManager.isStructuralSectionTitle("My Feature Area", file: custom))
+    #expect(!IdsManager.isStructuralSectionTitle("Login flow", file: custom))
+}
+
+@Test func idsAssignSkipsStructuralSectionTitles() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-skip-section-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let brDir = tmp.appendingPathComponent("business-requirements", isDirectory: true)
+    let tsDir = tmp.appendingPathComponent("technical-specifications", isDirectory: true)
+    try fm.createDirectory(at: brDir, withIntermediateDirectories: true)
+    try fm.createDirectory(at: tsDir, withIntermediateDirectories: true)
+
+    try """
+    # Business Requirements
+    ## User Login
+    The user shall log in.
+    ## View Dashboard
+    """.write(
+        to: brDir.appendingPathComponent("001-business-requirements.md"),
+        atomically: true,
+        encoding: .utf8
+    )
+    try """
+    # Technical Specifications
+    ## Login Screen Appearance
+    """.write(
+        to: tsDir.appendingPathComponent("001-technical-specifications.md"),
+        atomically: true,
+        encoding: .utf8
+    )
+
+    let specticusDir = tmp.appendingPathComponent(".specticus")
+    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
+    try "version: 1\n".write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    try IdsManager.assignIDs(
+        project: project,
+        options: .init(dryRun: false, assumeYes: true, checkGit: false)
+    )
+
+    let headings = try IdsManager.collectHeadings(project: project)
+    func id(for content: String) -> String? {
+        headings.first { $0.content == content }?.id
+    }
+
+    #expect(id(for: "Business Requirements") == nil)
+    #expect(id(for: "Technical Specifications") == nil)
+    #expect(id(for: "User Login")?.hasPrefix("BR") == true)
+    #expect(id(for: "View Dashboard")?.hasPrefix("BR") == true)
+    #expect(id(for: "Login Screen Appearance")?.hasPrefix("TS") == true)
+
+    let brMD = try String(
+        contentsOf: brDir.appendingPathComponent("001-business-requirements.md"),
+        encoding: .utf8
+    )
+    #expect(brMD.hasPrefix("# Business Requirements\n"))
+    #expect(!brMD.contains("# BR1: Business Requirements"))
+    #expect(brMD.contains("## BR1: User Login"))
+    #expect(brMD.contains("## BR2: View Dashboard"))
+}
