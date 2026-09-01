@@ -23,7 +23,7 @@ Writing specifications in Markdown keeps them close to the code and under versio
 ## Features
 
 - **Specifications as code** — Author in plain Markdown, generate beautiful HTML
-- **Traceability IDs** — Stable, human-readable identifiers (`BR1`, `TS2`, etc.) with drift detection
+- **Traceability IDs** — Stable, human-readable identifiers (`BR1`, `TS2`, etc.) with drift detection; authored inline in Markdown headings, rendered as subtle HTML chips (#149)
 - **Clean output** — Light/dark theme support, printable, well-structured HTML
 - **Powerful CLI** — `scs` with `init`, `build`, `open`, `lint`, `clean`, and `ids` subcommands
 - **Fast** — Written in Swift with minimal dependencies

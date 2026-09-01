@@ -1669,6 +1669,27 @@ enum IdsManager {
         return parts
     }
 
+    /// Parses an owning traceability ID from heading title text (#31 / #149).
+    ///
+    /// Outline numbering is stripped first (`1.2. BR1: Title` → same as `BR1: Title`).
+    /// Returns `nil` when the title does not own an ID.
+    /// When the heading is ID-only (`BR1:`), `content` is an empty string (unlike the
+    /// internal assign parser, which falls back to the full title).
+    static func parseOwningID(from title: String) -> (id: String, content: String)? {
+        let stripped = HeadingNumberer.stripOutlinePrefix(from: title)
+        guard let (id, _) = parseID(from: stripped) else { return nil }
+        let pattern = #"^[A-Z]{1,4}[1-9]\d*[:.\s]+(.*)$"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return (id, "")
+        }
+        let ns = stripped as NSString
+        guard let m = regex.firstMatch(in: stripped, range: NSRange(0..<ns.length)) else {
+            return (id, "")
+        }
+        let body = ns.substring(with: m.range(at: 1)).trimmingCharacters(in: .whitespaces)
+        return (id, body)
+    }
+
     /// Parses a traceability ID from an outline-stripped heading title according to the
     /// exact syntax rules defined in issue #31.
     ///

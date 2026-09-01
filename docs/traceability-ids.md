@@ -21,6 +21,16 @@ specticus binds each ID to the **descriptive text** of that heading (here, `User
 
 IDs are **not** outline numbers (`1.2.3`). Outline numbering is presentation in HTML; IDs are ownership and audit handles.
 
+### Authored inline, rendered as a chip (#149 / #42)
+
+Keep the owning form in **source Markdown** (`## BR1: User Login`). On `scs build`, HTML demotes the owning ID out of the visible heading into a small muted **chip** below the title:
+
+- Heading text readers see: **User Login** (plus outline numbers when enabled, e.g. `1.1. User Login`)
+- Chip: **BR1** (mono pill; stable CSS hooks `scs-id-chip` / `scs-id` / `data-scs-id`)
+- TOC labels omit the ID; heading anchors prefer the lowercase ID (`br1`) when present
+
+Body mentions of `BR1` in prose stay ordinary text — chips apply only to **owning** IDs on headings. Assign, lint, drift, and `ids.json` are unchanged by this render step.
+
 ---
 
 ## Recommended syntax

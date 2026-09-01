@@ -4,6 +4,7 @@ import Foundation
 
 /// Builds a hyperlinked TOC and injects stable `id` anchors into generated heading HTML.
 /// Works with hierarchical numbering from #4 (TOC shows the numbered title text).
+/// Owning traceability IDs are stripped from TOC labels; anchors prefer the ID slug (#149 / #42).
 enum TableOfContents {
     struct Heading: Equatable, Sendable {
         let level: Int
@@ -62,10 +63,12 @@ enum TableOfContents {
             if inFence { continue }
 
             guard let (level, text) = parseATXHeading(line) else { continue }
+            let parts = TraceabilityChips.parts(from: text)
+            let display = parts.visibleHeadingText
             let id: String? = (maxLevel > 0 && level <= maxLevel)
-                ? uniqueSlug(from: text, used: &usedIDs)
+                ? uniqueSlug(base: TraceabilityChips.preferredAnchorBase(from: text), used: &usedIDs)
                 : nil
-            results.append(Heading(level: level, text: text, id: id))
+            results.append(Heading(level: level, text: display, id: id))
         }
         return results
     }
@@ -190,11 +193,15 @@ enum TableOfContents {
     }
 
     private static func uniqueSlug(from text: String, used: inout Set<String>) -> String {
-        let base = slugify(text)
-        var candidate = base
+        uniqueSlug(base: slugify(text), used: &used)
+    }
+
+    private static func uniqueSlug(base: String, used: inout Set<String>) -> String {
+        let normalized = base.isEmpty ? "section" : base
+        var candidate = normalized
         var n = 2
         while used.contains(candidate) {
-            candidate = "\(base)-\(n)"
+            candidate = "\(normalized)-\(n)"
             n += 1
         }
         used.insert(candidate)
