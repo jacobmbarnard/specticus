@@ -204,12 +204,17 @@ struct AssemblyLayoutFile: Codable, Equatable, Sendable {
 }
 
 extension AssemblyLayout {
-    /// Load pack/user `layout.yml` if present and merge onto `packDefault`.
+    /// Load assembly layout for a project (#140 / #141).
+    ///
+    /// - If `.specticus/layout.yml` lists sections, that file **is** the pack's section map
+    ///   (complete list — required so non-default style packs are not padded with Path A verticals).
+    /// - Otherwise start from Path A `packDefault`.
+    /// - `config.assembly.sections` still overlay individual ids (order/sort / extra folders).
     static func loadMerged(layoutFileURL: URL?, configOverrides: [AssemblySectionSpec]) -> AssemblyLayout {
         var base = AssemblyLayout.packDefault
         if let url = layoutFileURL, FileManager.default.fileExists(atPath: url.path) {
             if let file = try? AssemblyLayoutFile.load(from: url), !file.sections.isEmpty {
-                base = merge(base: base, overrides: file.sections)
+                base = AssemblyLayout(sections: file.sections)
             }
         }
         if !configOverrides.isEmpty {

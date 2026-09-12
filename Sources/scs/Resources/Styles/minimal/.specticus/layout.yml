@@ -1,0 +1,20 @@
+# Assembly layout for the `minimal` style pack (#141).
+# This file is the complete section map (not a sparse overlay on Path A).
+# sort: lexical | reverse_lexical | alphanumeric
+
+sections:
+  - id: document-metadata
+    order: 0
+    sort: alphanumeric
+  - id: system-overview
+    order: 10
+    sort: alphanumeric
+  - id: business-requirements
+    order: 20
+    sort: alphanumeric
+  - id: diagrams
+    order: 30
+    sort: alphanumeric
+  - id: ADRs
+    order: 40
+    sort: alphanumeric

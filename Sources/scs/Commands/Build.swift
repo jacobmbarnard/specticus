@@ -64,6 +64,10 @@ struct Build: ParsableCommand {
             print("ℹ️  No .specticus/config.yml found — using built-in defaults. Run `scs init` for a full project.")
         }
 
+        if let unknownStyle = StylePackRegistry.unknownStyleDiagnostic(project.config.doc.style) {
+            print("⚠️  \(unknownStyle)")
+        }
+
         var markdown = try DocumentGenerator.assembleSources(
             input: input,
             baseDirectory: project.root.path,

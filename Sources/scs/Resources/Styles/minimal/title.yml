@@ -1,0 +1,11 @@
+# Project metadata (title.yml)
+
+title: "{{PROJECT_NAME}}"
+subtitle: "Specification"
+version: "0.1.0"
+author: "Your Name"
+organization: ""
+date: "2026-07-02"
+description: "Documentation initialized with the specticus minimal style pack."
+rights: "Copyright © 2026 Your Organization. All rights reserved."
+tags: []

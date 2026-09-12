@@ -1,8 +1,35 @@
-# Default template: vertical section folders (#139)
+# Template sections and style packs (#139 / #141)
 
 `scs init` scaffolds a **vertically sliced** documentation tree: each content
 domain is a top-level folder. You may nest feature/system folders inside a
 section (e.g. `technical-specifications/login-screen/`).
+
+## Style packs (`scs init --style`)
+
+A **style pack** is a vertical skeleton + default assembly layout + recommended
+config. Built-in packs:
+
+| Id | What you get |
+|----|----------------|
+| `default` | Full Path A tree (current `scs init` without `--style`) |
+| `minimal` | Stub: metadata, overview, requirements, diagrams, ADRs |
+
+```bash
+scs init MySpecs                  # same as --style default
+scs init MyNotes --style minimal
+scs init --help                   # lists built-in ids
+```
+
+The chosen id is stored as `doc.style` in `.specticus/config.yml`. If that key
+is missing, specticus uses **`default`**. `scs lint` / `scs build` **warn** on
+an unknown id (they do not fail the build).
+
+**On disk (engine repo):** `default` stays at `Sources/scs/Resources/Skeleton/`.
+Additional packs live at `Sources/scs/Resources/Styles/<id>/`. A new built-in
+style is: that directory + a `StylePackRegistry` entry + a pack `layout.yml`.
+
+`minimal` is an extensibility stub, not a product paradigm. Full alternate
+styles are separate epics (#110–#114).
 
 ## Section folders (default pack)
 
@@ -44,7 +71,10 @@ assembly includes the header (`README*` is skipped as content).
 
 ## Assembly order (#140)
 
-Defaults ship in `.specticus/layout.yml` (copied by `scs init`).
+Defaults ship in `.specticus/layout.yml` (copied by `scs init`). That file is
+the pack’s **complete** section map (so `minimal` is not padded with unused
+Path A verticals). Overlay individual ids under `assembly.sections` in
+`config.yml` if you need to.
 
 - **Section order:** `order` integers (lower first). Pack default follows the
   table above.

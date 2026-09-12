@@ -49,7 +49,8 @@ struct SpecticusProject: Sendable {
         root.appendingPathComponent(Self.titleFileName)
     }
 
-    /// Resolved assembly layout: pack default ⊕ `.specticus/layout.yml` ⊕ `config.assembly` (#140).
+    /// Resolved assembly layout: `.specticus/layout.yml` (complete pack map when present)
+    /// else Path A pack default, then `config.assembly` overlays (#140 / #141).
     var assemblyLayout: AssemblyLayout {
         let layoutFile: URL? = FileManager.default.fileExists(atPath: layoutURL.path) ? layoutURL : nil
         return AssemblyLayout.loadMerged(

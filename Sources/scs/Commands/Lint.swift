@@ -63,6 +63,11 @@ struct Lint: ParsableCommand {
                 if project.configSource == .file {
                     ok(".specticus/config.yml present and valid")
                     ok("Config: output=\(project.config.build.output), css=\(project.config.build.css), copy_assets=\(project.config.build.copyAssets), track_builds=\(project.config.build.trackBuilds), diagrams=\(project.config.build.diagramsEnabled)")
+                    if let unknown = StylePackRegistry.unknownStyleDiagnostic(project.config.doc.style) {
+                        warn(unknown, suggestion: "Set `doc.style` to a built-in pack (`scs init --help`) or omit it for `default` (#141).")
+                    } else {
+                        ok("doc.style=\(project.config.doc.style)")
+                    }
                 }
             } else {
                 warn(".specticus/config.yml missing", suggestion: "Re-run init or manually create a config file.")
