@@ -16,8 +16,13 @@ as described in [docs/release-process.md](docs/release-process.md).
 - HTML traceability chips (#149 / #42): owning IDs (`## BR1: Title`) stay in
   source Markdown but render as muted chips under human heading titles; TOC
   omits IDs; anchors prefer lowercase ID slugs (`br1`)
+- Style packs (#141): `scs init --style` (`default`, stub `minimal`),
+  `doc.style` in config, lint/build warn on unknown ids
 
 ### Changed
+
+- `.specticus/layout.yml` is the pack’s complete section map when present
+  (non-default packs are not padded with Path A verticals) (#141)
 
 ### Fixed
 

@@ -30,7 +30,7 @@ Writing specifications in Markdown keeps them close to the code and under versio
 
 **Using IDs for the first time?** Read **[Traceability IDs: recommended workflow and common pitfalls](docs/traceability-ids.md)** — syntax, when to assign vs lint vs build, drift, orphans, team patterns, and recovery recipes (#41).
 
-**New projects** use **vertical section folders** (business requirements, technical specifications, glossaries, …). See **[docs/template-sections.md](docs/template-sections.md)** (#139).
+**New projects** use **vertical section folders** (business requirements, technical specifications, glossaries, …). `scs init --style default` is the full Path A tree; `--style minimal` is a sparse stub. See **[docs/template-sections.md](docs/template-sections.md)** (#139 / #141).
 
 ## Happy path
 

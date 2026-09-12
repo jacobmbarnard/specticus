@@ -3197,6 +3197,30 @@ private func makeLifecycleFixture(
     #expect(merged.unknownSectionIDs.contains("custom-vertical"))
 }
 
+@Test func loadMergedUsesLayoutFileAsCompleteSectionMap() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-layout-complete-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    let layoutURL = tmp.appendingPathComponent("layout.yml")
+    try """
+    sections:
+      - id: document-metadata
+        order: 0
+        sort: alphanumeric
+      - id: business-requirements
+        order: 10
+        sort: lexical
+    """.write(to: layoutURL, atomically: true, encoding: .utf8)
+
+    let layout = AssemblyLayout.loadMerged(layoutFileURL: layoutURL, configOverrides: [])
+    #expect(layout.orderedSectionIDs == ["document-metadata", "business-requirements"])
+    #expect(!layout.orderedSectionIDs.contains("technical-specifications"))
+    #expect(layout.sortPolicy(forSectionID: "business-requirements") == .lexical)
+}
+
 @Test func assemblyLayoutParsesFromConfigYAML() throws {
     let yaml = """
     version: 1
@@ -3336,4 +3360,84 @@ private func makeLifecycleFixture(
     #expect(!brMD.contains("# BR1: Business Requirements"))
     #expect(brMD.contains("## BR1: User Login"))
     #expect(brMD.contains("## BR2: View Dashboard"))
+}
+
+// MARK: - Style packs (#141)
+
+@Test func stylePackRegistryIncludesDefaultAndMinimal() throws {
+    #expect(StylePackRegistry.pack(id: "default") != nil)
+    #expect(StylePackRegistry.pack(id: "DEFAULT")?.id == "default")
+    #expect(StylePackRegistry.pack(id: "minimal")?.id == "minimal")
+    #expect(StylePackRegistry.pack(id: "nope") == nil)
+    let def = try StylePackRegistry.skeletonURL(forPackID: "default")
+    #expect(def.lastPathComponent == "Skeleton" || def.path.contains("Skeleton"))
+    let min = try StylePackRegistry.skeletonURL(forPackID: "minimal")
+    #expect(min.lastPathComponent == "minimal" || min.path.contains("Styles"))
+    #expect(StylePackRegistry.helpListing.contains("default"))
+    #expect(StylePackRegistry.helpListing.contains("minimal"))
+}
+
+@Test func unknownStyleDiagnostic() {
+    #expect(StylePackRegistry.unknownStyleDiagnostic("default") == nil)
+    #expect(StylePackRegistry.unknownStyleDiagnostic("minimal") == nil)
+    #expect(StylePackRegistry.unknownStyleDiagnostic("ieee-official") != nil)
+}
+
+@Test func configParsesDocStyle() throws {
+    let yaml = """
+    version: 1
+    doc:
+      style: default
+    """
+    let config = try SpecticusConfig.parse(yaml: yaml)
+    #expect(config.doc.style == "default")
+}
+
+@Test func configDefaultsDocStyleWhenMissing() throws {
+    let yaml = "version: 1\n"
+    let config = try SpecticusConfig.parse(yaml: yaml)
+    #expect(config.doc.style == StylePackRegistry.defaultPackID)
+}
+
+@Test func initMinimalStylePackScaffoldsSubset() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-init-minimal-\(UUID().uuidString)")
+    defer { try? fm.removeItem(at: tmp) }
+
+    var cmd = Init()
+    cmd.directory = tmp.path
+    cmd.style = "minimal"
+    try cmd.run()
+
+    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("business-requirements").path))
+    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("ADRs/rejected").path))
+    #expect(!fm.fileExists(atPath: tmp.appendingPathComponent("technical-specifications").path))
+    #expect(!fm.fileExists(atPath: tmp.appendingPathComponent("BDRs").path))
+
+    let configText = try String(
+        contentsOf: tmp.appendingPathComponent(".specticus/config.yml"),
+        encoding: .utf8
+    )
+    #expect(configText.contains("style: \"minimal\"") || configText.contains("style: minimal"))
+
+    let project = try SpecticusProject.load(from: tmp.path)
+    #expect(project.config.doc.style == "minimal")
+    #expect(project.assemblyLayout.orderedSectionIDs == [
+        "document-metadata",
+        "system-overview",
+        "business-requirements",
+        "diagrams",
+        "ADRs",
+    ])
+    #expect(StylePackRegistry.unknownStyleDiagnostic(project.config.doc.style) == nil)
+}
+
+@Test func initUnknownStyleThrows() throws {
+    var cmd = Init()
+    cmd.directory = "/tmp/specticus-should-not-exist-\(UUID().uuidString)"
+    cmd.style = "not-a-real-pack"
+    #expect(throws: (any Error).self) {
+        try cmd.run()
+    }
 }

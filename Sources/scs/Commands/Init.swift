@@ -6,11 +6,23 @@ import ArgumentParser
 struct Init: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Initialize a new specticus documentation project with templates and structure.",
-        discussion: "Creates a vertically sliced documentation tree (section folders for requirements, specs, glossaries, …), ADRs/BDRs with status folders including rejected/, appendices, diagrams/, .specticus/config.yml, title.yml, style.css, and welcome-template.md (#139)."
+        discussion: """
+            Creates a vertically sliced documentation tree from a style pack (#141). \
+            Built-in styles:
+            \(StylePackRegistry.helpListing)
+
+            Default style is `default` (Path A). Use `--style` to select a pack.
+            """
     )
 
     @Argument(help: "Directory name for the new project (defaults to current directory)")
     var directory: String?
+
+    @Option(
+        name: .long,
+        help: "Documentation style pack id (default: default). See `scs init --help` for built-in styles."
+    )
+    var style: String = StylePackRegistry.defaultPackID
 
     @Flag(name: .long, help: "Initialize even if the target directory is not empty (may overwrite files)")
     var force: Bool = false
@@ -18,6 +30,12 @@ struct Init: ParsableCommand {
     func run() throws {
         let fm = FileManager.default
         let (targetDir, projectName) = resolveTarget(fm: fm)
+        let styleID = style.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard let resolved = StylePackRegistry.pack(id: styleID) else {
+            throw ValidationError(
+                "Unknown documentation style '\(style)'. Built-in: \(StylePackRegistry.builtInIDs.joined(separator: ", "))."
+            )
+        }
 
         // Ensure target directory
         var isDir: ObjCBool = false
@@ -35,29 +53,25 @@ struct Init: ParsableCommand {
             try fm.createDirectory(atPath: targetDir, withIntermediateDirectories: true)
         }
 
-        // Locate embedded skeleton
-        guard let skeletonURL = Bundle.module.url(forResource: "Skeleton", withExtension: nil, subdirectory: "Resources") else {
-            throw ValidationError("Internal error: embedded template resources not found (Skeleton).")
-        }
+        let skeletonURL = try StylePackRegistry.skeletonURL(forPackID: resolved.id)
 
         let targetURL = URL(fileURLWithPath: targetDir)
-        try copySkeleton(from: skeletonURL, to: targetURL, projectName: projectName, fm: fm)
+        try copySkeleton(
+            from: skeletonURL,
+            to: targetURL,
+            projectName: projectName,
+            styleID: resolved.id,
+            fm: fm
+        )
 
         let displayTarget = (targetDir == ".") ? "." : targetDir
-        print("✅ Initialized specticus project '\(projectName)' in '\(displayTarget)'.")
+        print("✅ Initialized specticus project '\(projectName)' in '\(displayTarget)' (style: \(resolved.id)).")
         print("")
         print("Contents created:")
+        print("  • Style pack `\(resolved.id)` — \(resolved.summary)")
         print("  • title.yml, welcome-template.md, style.css")
-        print("  • Vertical section folders (#139): document-metadata, system-overview, stakeholders-and-scope,")
-        print("    business/technical notes & constraints, business-requirements, technical-specifications,")
-        print("    quality-attributes, external-interfaces, data-and-privacy, security-and-access, use-cases,")
-        print("    test-plan, operational-concerns, risks-and-tradeoffs, compliance-and-controls,")
-        print("    business/technical glossaries, references, diagrams, appendices/tech-specs-to-business-reqs")
-        print("  • document-metadata/document-revisions/ for spec revision history")
-        print("  • ADRs/ and BDRs/ (proposed/accepted/deprecated/superseded/rejected) + examples")
-        print("  • diagrams/ (Mermaid .mmd starters)")
-        print("  • .specticus/config.yml (build output, CSS, diagrams, IDs settings)")
-        print("  • Nest feature folders under any section as needed (e.g. technical-specifications/login-screen/)")
+        print("  • Vertical section folders from the pack (#139/#141); nest feature folders as needed")
+        print("  • .specticus/config.yml (doc.style=\(resolved.id)) + layout.yml (#140/#141)")
         print("")
         print("Next steps:")
         if targetDir != "." {
@@ -79,7 +93,13 @@ struct Init: ParsableCommand {
         return (".", name.isEmpty ? "specticus-project" : name)
     }
 
-    private func copySkeleton(from src: URL, to dst: URL, projectName: String, fm: FileManager) throws {
+    private func copySkeleton(
+        from src: URL,
+        to dst: URL,
+        projectName: String,
+        styleID: String,
+        fm: FileManager
+    ) throws {
         // Walk the skeleton (include dot-dirs like .specticus and dot-files like .gitkeep)
         let enumerator = fm.enumerator(
             at: src,
@@ -113,6 +133,7 @@ struct Init: ParsableCommand {
             // Regular file: load, substitute placeholders, write
             var content = try String(contentsOf: fileURL, encoding: .utf8)
             content = content.replacingOccurrences(of: "{{PROJECT_NAME}}", with: projectName)
+            content = content.replacingOccurrences(of: "{{DOC_STYLE}}", with: styleID)
 
             try fm.createDirectory(at: destURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try content.write(to: destURL, atomically: true, encoding: .utf8)

@@ -13,6 +13,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
     var ids: IdsSection
     /// Optional assembly layout overrides (#140). Merged onto pack defaults / layout.yml.
     var assembly: AssemblyConfigSection
+    /// Documentation style pack (#141). Missing ⇒ `default`.
+    var doc: DocSection
 
     enum CodingKeys: String, CodingKey {
         case version
@@ -21,6 +23,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         case decisionRecords = "decision_records"
         case ids
         case assembly
+        case doc
     }
 
     init(
@@ -29,7 +32,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         build: BuildSection = BuildSection(),
         decisionRecords: DecisionRecordsSection = DecisionRecordsSection(),
         ids: IdsSection = IdsSection(),
-        assembly: AssemblyConfigSection = AssemblyConfigSection()
+        assembly: AssemblyConfigSection = AssemblyConfigSection(),
+        doc: DocSection = DocSection()
     ) {
         self.version = version
         self.project = project
@@ -37,6 +41,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         self.decisionRecords = decisionRecords
         self.ids = ids
         self.assembly = assembly
+        self.doc = doc
     }
 
     init(from decoder: Decoder) throws {
@@ -49,9 +54,29 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         ids = try container.decodeIfPresent(IdsSection.self, forKey: .ids) ?? IdsSection()
         assembly = try container.decodeIfPresent(AssemblyConfigSection.self, forKey: .assembly)
             ?? AssemblyConfigSection()
+        doc = try container.decodeIfPresent(DocSection.self, forKey: .doc) ?? DocSection()
     }
 
     static let `default` = SpecticusConfig()
+
+    /// `doc:` block — style pack selection (#141).
+    struct DocSection: Codable, Equatable, Sendable {
+        /// Style pack id (`default` today). Unknown ids are kept but may warn later.
+        var style: String
+
+        init(style: String = StylePackRegistry.defaultPackID) {
+            self.style = style
+        }
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            style = try c.decodeIfPresent(String.self, forKey: .style) ?? StylePackRegistry.defaultPackID
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case style
+        }
+    }
 
     /// User overrides under `assembly:` in config.yml (#140).
     struct AssemblyConfigSection: Codable, Equatable, Sendable {

@@ -9,6 +9,11 @@ project:
   title: "{{PROJECT_NAME}}"
   # author: "Your Name"
 
+# Documentation style pack (#141). Built-in: default (Path A), minimal (stub).
+# `scs init --style <id>` sets this; missing style ⇒ default.
+doc:
+  style: "{{DOC_STYLE}}"
+
 build:
   # Used only when no numbered *.md sections are found (legacy single-file mode)
   default_input: "welcome-template.md"
