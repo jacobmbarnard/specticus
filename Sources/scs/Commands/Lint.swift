@@ -185,10 +185,23 @@ struct Lint: ParsableCommand {
         // --- Diagrams (config diagrams_dir)
         let diagramsDir = project.config.build.diagramsDir
         let diagramsPath = project.diagramsDirectory.path
-        if fm.fileExists(atPath: diagramsPath) {
-            let diagrams = (try? fm.contentsOfDirectory(atPath: diagramsPath).filter { $0.hasSuffix(".mmd") }) ?? []
-            if !diagrams.isEmpty {
-                ok("\(diagramsDir)/ present with \(diagrams.count) Mermaid file(s)")
+        if !project.config.build.diagramsEnabled {
+            ok("Diagrams disabled in config (build.diagrams_enabled: false)")
+        } else if fm.fileExists(atPath: diagramsPath) {
+            let mmdFiles = (try? DiagramPipeline.discoverMMDFiles(
+                projectRoot: rootURL,
+                diagramsDir: diagramsDir
+            )) ?? []
+            if !mmdFiles.isEmpty {
+                ok("\(diagramsDir)/ present with \(mmdFiles.count) Mermaid file(s)")
+                if DiagramPipeline.whichMermaidCLI(project.config.build.mermaidCli) != nil {
+                    ok("Mermaid CLI (\(project.config.build.mermaidCli)) available for SVG rendering (#21)")
+                } else {
+                    warn(
+                        "Mermaid CLI '\(project.config.build.mermaidCli)' not found — `scs build` will skip SVG generation",
+                        suggestion: "Install @mermaid-js/mermaid-cli (`npm install -g @mermaid-js/mermaid-cli`) or set build.mermaid_cli / SCS_MERMAID_CLI (#21)."
+                    )
+                }
             } else {
                 warn("\(diagramsDir)/ exists but contains no .mmd files",
                      suggestion: "Add Mermaid diagrams or remove the folder if unused.")
@@ -196,8 +209,6 @@ struct Lint: ParsableCommand {
         } else if project.config.build.diagramsEnabled {
             warn("\(diagramsDir)/ directory not found",
                  suggestion: "Useful for architecture diagrams. Run init to create starter diagrams.")
-        } else {
-            ok("Diagrams disabled in config (build.diagrams_enabled: false)")
         }
 
         // --- Decision records
@@ -333,10 +344,11 @@ struct Lint: ParsableCommand {
             warn("Could not fully validate traceability IDs: \(error.localizedDescription)")
         }
 
-        // --- External tooling notes (Mermaid is client-rendered)
+        // --- External tooling notes (Mermaid CLI → SVG at build, #21)
         print("\n  ℹ️  External tools:")
-        print("      • Mermaid diagrams: rendered client-side in the output HTML (no CLI tool required).")
-        print("      • For advanced Mermaid CLI rendering you can optionally install @mermaid-js/mermaid-cli.")
+        print("      • Mermaid `.mmd` files render to `output/svg/` at build when `mmdc` is on PATH.")
+        print("      • Install: npm install -g @mermaid-js/mermaid-cli  (or set build.mermaid_cli / SCS_MERMAID_CLI).")
+        print("      • Missing CLI warns and still produces HTML; `--skip-diagrams` / diagrams_enabled: false skips rendering.")
         print("  ℹ️  Config: .specticus/config.yml drives output path, CSS, asset copy, diagrams, build tracking (#8), and ID traceability settings (#6; #32 heading levels; #33 counters; #36 drift_sensitivity; #37 ids.json lifecycle; #38 auto_assign is report-only on build — mutation needs --assign-ids; #39 collaboration: duplicate live IDs / ID hygiene, SCM-agnostic). Lint enforces ID uniqueness, drift, plain-text headings, and reports orphans.")
         if project.hasSpecticusDirectory {
             if FileManager.default.fileExists(atPath: project.buildNumberURL.path) {

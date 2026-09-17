@@ -105,6 +105,7 @@ import Foundation
     #expect(config.build.css == "style.css")
     #expect(config.build.diagramsEnabled == true)
     #expect(config.build.diagramsDir == "diagrams")
+    #expect(config.build.mermaidCli == "mmdc")
     #expect(config.ids.autoAssign == false)
     #expect(config.ids.headingMaxLevel == SpecticusConfig.IdsSection.defaultHeadingMaxLevel)
     #expect(config.ids.headingMaxLevel == 2)
@@ -3440,4 +3441,184 @@ private func makeLifecycleFixture(
     #expect(throws: (any Error).self) {
         try cmd.run()
     }
+}
+
+// MARK: - Mermaid → SVG (#21)
+
+final class StubMermaidCLI: ProcessRunning, @unchecked Sendable {
+    var executablePath: String? = "/stub/mmdc"
+    var fail = false
+    var runCount = 0
+
+    func findExecutable(_ name: String) -> String? { executablePath }
+
+    func run(executable: String, arguments: [String]) throws -> (status: Int32, stdout: String, stderr: String) {
+        runCount += 1
+        if fail {
+            return (1, "", "stub failure")
+        }
+        guard let outFlag = arguments.firstIndex(of: "-o"), outFlag + 1 < arguments.count else {
+            return (2, "", "missing -o")
+        }
+        let dest = arguments[outFlag + 1]
+        try FileManager.default.createDirectory(
+            at: URL(fileURLWithPath: dest).deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>stub</text></svg>\n"
+            .write(toFile: dest, atomically: true, encoding: .utf8)
+        return (0, "", "")
+    }
+}
+
+@Test func discoverMMDFilesFindsNestedSources() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-mmd-discover-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp.appendingPathComponent("diagrams/nested"), withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+
+    try "flowchart TD\n  A-->B\n".write(to: tmp.appendingPathComponent("diagrams/flow.mmd"), atomically: true, encoding: .utf8)
+    try "flowchart TD\n  C-->D\n".write(to: tmp.appendingPathComponent("diagrams/nested/inner.mmd"), atomically: true, encoding: .utf8)
+    try "ignore".write(to: tmp.appendingPathComponent("diagrams/notes.md"), atomically: true, encoding: .utf8)
+
+    let found = try DiagramPipeline.discoverMMDFiles(projectRoot: tmp, diagramsDir: "diagrams")
+    #expect(found.map(\.relativePath) == ["flow.mmd", "nested/inner.mmd"])
+}
+
+@Test func renderMMDWritesSVGAndRewrites() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-mmd-render-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp.appendingPathComponent("diagrams"), withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+    try "flowchart TD\n  A-->B\n".write(
+        to: tmp.appendingPathComponent("diagrams/context-diagram.mmd"),
+        atomically: true,
+        encoding: .utf8
+    )
+    let outputRoot = tmp.appendingPathComponent("output", isDirectory: true)
+    let stub = StubMermaidCLI()
+
+    let outcome = try DiagramPipeline.renderMMDFiles(
+        projectRoot: tmp,
+        diagramsDir: "diagrams",
+        outputRoot: outputRoot,
+        enabled: true,
+        cliName: "mmdc",
+        runner: stub
+    )
+
+    #expect(stub.runCount == 1)
+    #expect(outcome.generatedRelative == ["svg/context-diagram.svg"])
+    #expect(outcome.rewrites["diagrams/context-diagram.mmd"] == "svg/context-diagram.svg")
+    #expect(outcome.rewrites["context-diagram.mmd"] == "svg/context-diagram.svg")
+    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/svg/context-diagram.svg").path))
+    #expect(!outcome.missingCLI)
+}
+
+@Test func renderMMDSkipsWhenDisabled() throws {
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-mmd-skip-\(UUID().uuidString)")
+    let stub = StubMermaidCLI()
+    let outcome = try DiagramPipeline.renderMMDFiles(
+        projectRoot: tmp,
+        diagramsDir: "diagrams",
+        outputRoot: tmp.appendingPathComponent("output"),
+        enabled: false,
+        runner: stub
+    )
+    #expect(outcome.skipped)
+    #expect(stub.runCount == 0)
+    #expect(outcome.generatedRelative.isEmpty)
+}
+
+@Test func renderMMDWarnsWhenCLIMissing() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-mmd-nocli-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp.appendingPathComponent("diagrams"), withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+    try "flowchart TD\n  A-->B\n".write(
+        to: tmp.appendingPathComponent("diagrams/flow.mmd"),
+        atomically: true,
+        encoding: .utf8
+    )
+    let stub = StubMermaidCLI()
+    stub.executablePath = nil
+
+    let outcome = try DiagramPipeline.renderMMDFiles(
+        projectRoot: tmp,
+        diagramsDir: "diagrams",
+        outputRoot: tmp.appendingPathComponent("output"),
+        enabled: true,
+        runner: stub
+    )
+    #expect(outcome.missingCLI)
+    #expect(outcome.skipped)
+    #expect(!outcome.warnings.isEmpty)
+    #expect(outcome.generatedRelative.isEmpty)
+    #expect(stub.runCount == 0)
+}
+
+@Test func renderMMDContinuesWhenOneFileFails() throws {
+    let fm = FileManager.default
+    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        .appendingPathComponent("specticus-mmd-partial-\(UUID().uuidString)")
+    try fm.createDirectory(at: tmp.appendingPathComponent("diagrams"), withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: tmp) }
+    try "ok".write(to: tmp.appendingPathComponent("diagrams/a.mmd"), atomically: true, encoding: .utf8)
+    try "bad".write(to: tmp.appendingPathComponent("diagrams/b.mmd"), atomically: true, encoding: .utf8)
+
+    final class FailSecond: ProcessRunning, @unchecked Sendable {
+        var n = 0
+        func findExecutable(_ name: String) -> String? { "/stub/mmdc" }
+        func run(executable: String, arguments: [String]) throws -> (status: Int32, stdout: String, stderr: String) {
+            n += 1
+            if n == 1 {
+                let dest = arguments[arguments.firstIndex(of: "-o")! + 1]
+                try FileManager.default.createDirectory(
+                    at: URL(fileURLWithPath: dest).deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try "<svg/>".write(toFile: dest, atomically: true, encoding: .utf8)
+                return (0, "", "")
+            }
+            return (1, "", "nope")
+        }
+    }
+    let runner = FailSecond()
+    let outcome = try DiagramPipeline.renderMMDFiles(
+        projectRoot: tmp,
+        diagramsDir: "diagrams",
+        outputRoot: tmp.appendingPathComponent("output"),
+        enabled: true,
+        runner: runner
+    )
+    #expect(outcome.generatedRelative.count == 1)
+    #expect(outcome.warnings.count == 1)
+}
+
+@Test func embedRenderedDiagramsReplacesCodeRefs() {
+    let html = #"<p>See <code>diagrams/context-diagram.mmd</code> and <code>flow.mmd</code>.</p>"#
+    let out = DiagramPipeline.embedRenderedDiagrams(
+        in: html,
+        rewrites: [
+            "diagrams/context-diagram.mmd": "svg/context-diagram.svg",
+            "flow.mmd": "svg/flow.svg",
+        ]
+    )
+    #expect(out.contains(#"src="svg/context-diagram.svg""#))
+    #expect(out.contains(#"class="scs-diagram""#))
+    #expect(out.contains(#"src="svg/flow.svg""#))
+    #expect(!out.contains("<code>diagrams/context-diagram.mmd</code>"))
+}
+
+@Test func configParsesMermaidCli() throws {
+    let yaml = """
+    build:
+      mermaid_cli: "/opt/bin/mmdc"
+    """
+    let config = try SpecticusConfig.parse(yaml: yaml)
+    #expect(config.build.mermaidCli == "/opt/bin/mmdc")
 }

@@ -28,7 +28,7 @@ struct Build: ParsableCommand {
     @Option(name: .shortAndLong, help: "Output HTML path (defaults to build.output in .specticus/config.yml, or output/index.html)")
     var output: String?
 
-    @Flag(name: .long, help: "Skip diagram processing (placeholder for #5; geared for Mermaid)")
+    @Flag(name: .long, help: "Skip Mermaid `.mmd` → SVG rendering (#21)")
     var skipDiagrams: Bool = false
 
     @Flag(name: .long, help: "Do not copy CSS/images/SVGs into the output tree (overrides build.copy_assets)")
@@ -113,7 +113,40 @@ struct Build: ParsableCommand {
             buildInfo: buildInfo,
             tocMaxLevel: tocMax
         )
-        html = ResourcePublisher.rewriteReferences(in: html, rewrites: publish.pathRewrites)
+        let diagramsOff = skipDiagrams || !project.config.build.diagramsEnabled
+        var diagramRewrites: [String: String] = [:]
+        if diagramsOff {
+            print("(Diagrams skipped as requested)")
+        } else {
+            let diagramOutcome = try DiagramPipeline.renderMMDFiles(
+                projectRoot: project.root,
+                diagramsDir: project.config.build.diagramsDir,
+                outputRoot: publish.outputRoot,
+                enabled: true,
+                cliName: project.config.build.mermaidCli
+            )
+            for warning in diagramOutcome.warnings {
+                print("⚠️  \(warning)")
+            }
+            if !diagramOutcome.generatedRelative.isEmpty {
+                print("🎨 Rendered \(diagramOutcome.generatedRelative.count) Mermaid diagram(s) → svg/")
+                for item in diagramOutcome.generatedRelative.prefix(12) {
+                    print("   • \(item)")
+                }
+                if diagramOutcome.generatedRelative.count > 12 {
+                    print("   • … and \(diagramOutcome.generatedRelative.count - 12) more")
+                }
+            }
+            diagramRewrites = diagramOutcome.rewrites
+        }
+
+        var allRewrites = publish.pathRewrites
+        for (key, value) in diagramRewrites {
+            allRewrites[key] = value
+        }
+
+        html = ResourcePublisher.rewriteReferences(in: html, rewrites: allRewrites)
+        html = DiagramPipeline.embedRenderedDiagrams(in: html, rewrites: diagramRewrites)
 
         // Resolve to absolute path under project for reliable writes
         let absoluteHTML = project.resolve(outputPath).path
@@ -129,11 +162,6 @@ struct Build: ParsableCommand {
             }
         } else if copyAssets {
             print("ℹ️  No CSS/images/SVGs found to copy (or copy_assets produced an empty set).")
-        }
-
-        let diagramsOff = skipDiagrams || !project.config.build.diagramsEnabled
-        if diagramsOff {
-            print("(Diagrams skipped as requested)")
         }
 
         // Traceability checks (#6 / #36 / #39): warn on drift, Markdown-in-headings,

@@ -124,6 +124,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         var diagramsEnabled: Bool
         /// Directory for diagram sources (Mermaid `.mmd`, future PlantUML, etc.).
         var diagramsDir: String
+        /// Executable used to render `.mmd` → SVG at build time (default `mmdc`). Override with `SCS_MERMAID_CLI`.
+        var mermaidCli: String
         /// When true, copy CSS/images/SVGs into a structured tree beside the HTML and rewrite references (#9).
         var copyAssets: Bool
         /// When true, increment `.specticus/build-number.yml` on each build and stamp the HTML footer (#8).
@@ -141,6 +143,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             case css
             case diagramsEnabled = "diagrams_enabled"
             case diagramsDir = "diagrams_dir"
+            case mermaidCli = "mermaid_cli"
             case copyAssets = "copy_assets"
             case trackBuilds = "track_builds"
             case headingNumberMaxLevel = "heading_number_max_level"
@@ -154,6 +157,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             css: String = "style.css",
             diagramsEnabled: Bool = true,
             diagramsDir: String = "diagrams",
+            mermaidCli: String = "mmdc",
             copyAssets: Bool = true,
             trackBuilds: Bool = true,
             headingNumberMaxLevel: Int = HeadingNumberer.defaultMaxLevel,
@@ -165,6 +169,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             self.css = css
             self.diagramsEnabled = diagramsEnabled
             self.diagramsDir = diagramsDir
+            self.mermaidCli = mermaidCli
             self.copyAssets = copyAssets
             self.trackBuilds = trackBuilds
             self.headingNumberMaxLevel = HeadingNumberer.clampMaxLevel(headingNumberMaxLevel)
@@ -179,6 +184,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             css = try container.decodeIfPresent(String.self, forKey: .css) ?? "style.css"
             diagramsEnabled = try container.decodeIfPresent(Bool.self, forKey: .diagramsEnabled) ?? true
             diagramsDir = try container.decodeIfPresent(String.self, forKey: .diagramsDir) ?? "diagrams"
+            mermaidCli = try container.decodeIfPresent(String.self, forKey: .mermaidCli) ?? "mmdc"
             copyAssets = try container.decodeIfPresent(Bool.self, forKey: .copyAssets) ?? true
             trackBuilds = try container.decodeIfPresent(Bool.self, forKey: .trackBuilds) ?? true
             let rawMax = try container.decodeIfPresent(Int.self, forKey: .headingNumberMaxLevel)

@@ -18,6 +18,8 @@ as described in [docs/release-process.md](docs/release-process.md).
   omits IDs; anchors prefer lowercase ID slugs (`br1`)
 - Style packs (#141): `scs init --style` (`default`, stub `minimal`),
   `doc.style` in config, lint/build warn on unknown ids
+- Mermaid `.mmd` → `output/svg/` at `scs build` when `mmdc` is installed;
+  missing CLI warns and still writes HTML (#21)
 
 ### Changed
 

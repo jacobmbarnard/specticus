@@ -54,7 +54,7 @@ styles are separate epics (#110–#114).
 | `compliance-and-controls/` | Lightweight controls narrative |
 | `business-glossary/` / `technical-glossary/` | Split glossaries |
 | `references/` | External links |
-| `diagrams/` | Mermaid `.mmd` (+ overview markdown) |
+| `diagrams/` | Mermaid `.mmd` sources; `scs build` renders to `output/svg/` when `mmdc` is installed (#21) |
 | `ADRs/` / `BDRs/` | Decision records |
 | `appendices/` | Includes `tech-specs-to-business-reqs/` (TS→BR tables) |
 
@@ -99,8 +99,18 @@ assembly:
 **Legacy:** projects with only flat root `00N-*.md` files still assemble (no
 section folders detected).
 
+## Diagrams (#21)
+
+Keep Mermaid sources as `diagrams/*.mmd` (not generated SVG in git). On `scs build`:
+
+- If `mmdc` is on `PATH` (or `build.mermaid_cli` / `SCS_MERMAID_CLI`), each file is rendered to `output/svg/<name>.svg` and HTML references to the `.mmd` become `<img>` tags.
+- If the CLI is missing, the HTML build still succeeds with a warning.
+- `--skip-diagrams` or `build.diagrams_enabled: false` skips rendering.
+- Install: `npm install -g @mermaid-js/mermaid-cli`
+
 ## See also
 
 - Epic #109 (style profiles)
 - #140 assembly layout config
 - #141 multi-template / `init --style`
+- #21 Mermaid → SVG at build

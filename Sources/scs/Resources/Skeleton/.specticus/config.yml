@@ -23,6 +23,7 @@ build:
   copy_assets: true
   diagrams_enabled: true
   diagrams_dir: "diagrams"
+  # mermaid_cli: "mmdc"   # .mmd → output/svg at build (#21); override with SCS_MERMAID_CLI
   # Mermaid diagrams can be embedded in Markdown or kept under diagrams_dir
   # Increment .specticus/build-number.yml and stamp the HTML footer on each build (#8)
   track_builds: true

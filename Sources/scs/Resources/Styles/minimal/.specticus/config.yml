@@ -19,6 +19,7 @@ build:
   copy_assets: true
   diagrams_enabled: true
   diagrams_dir: "diagrams"
+  # mermaid_cli: "mmdc"
   track_builds: true
   heading_number_max_level: 3
   toc: true

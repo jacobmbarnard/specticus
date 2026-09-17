@@ -2,14 +2,9 @@
 
 This section provides high-level visual models of the system. Source files for the diagrams are maintained in the `diagrams/` folder as Mermaid (`.mmd`) files.
 
-Mermaid diagrams can be embedded directly using:
+`scs build` renders those `.mmd` files to `output/svg/` when the Mermaid CLI (`mmdc`) is installed. Backtick references such as `diagrams/context-diagram.mmd` become images in the HTML.
 
-```mermaid
-flowchart TD
-    ...
-```
-
-When rendered (in GitHub, VS Code, or future Specticus diagram support), they produce visual diagrams.
+Fenced ` ```mermaid ` blocks in Markdown are left as source (GitHub/VS Code still preview them).
 
 ## Context Diagram
 
