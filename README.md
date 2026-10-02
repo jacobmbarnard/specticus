@@ -12,9 +12,9 @@
 [![macOS arm64](https://img.shields.io/badge/macOS%20arm64-passing-brightgreen)](https://github.com/jacobmbarnard/specticus/actions/workflows/release.yml)
 [![Linux x86_64](https://img.shields.io/badge/Linux%20x86__64-passing-brightgreen)](https://github.com/jacobmbarnard/specticus/actions/workflows/release.yml)
 [![Linux arm64](https://img.shields.io/badge/Linux%20arm64-passing-brightgreen)](https://github.com/jacobmbarnard/specticus/actions/workflows/release.yml)
-[![Windows](https://img.shields.io/badge/Windows%20%7C%20Planned...-lightgrey)](https://github.com/jacobmbarnard/specticus/issues/62)
+[![Windows](https://img.shields.io/badge/Windows%20%7C%20Planned...-lightgrey)](https://github.com/jacobmbarnard/specticus/issues/10)
 
-Prebuilt archives ship on each tagged release (`v*`) via the **Release binaries** workflow (see [docs/binaries.md](docs/binaries.md)). Platform badges reflect the current release matrix; **Windows** is planned ([#62](https://github.com/jacobmbarnard/specticus/issues/62)).
+Prebuilt archives ship on each tagged release (`v*`) via the **Release binaries** workflow (see [docs/binaries.md](docs/binaries.md)). Platform badges reflect the current release matrix; **Windows** is planned ([#10](https://github.com/jacobmbarnard/specticus/issues/10)).
 
 ## Why specticus?
 
@@ -49,7 +49,7 @@ scs open
 
 **Pre-1.0:** the public CLI surface may still change in minor releases. specticus
 is **maintainer-driven** (see [CONTRIBUTING.md](CONTRIBUTING.md)). It is a
-lightweight **specs-as-code** tool — not a DOORS/Jama-class requirements platform.
+lightweight **specs-as-code** CLI: Markdown in Git, stable IDs, HTML out.
 
 ## Installation
 
@@ -106,7 +106,7 @@ chmod +x ~/.local/bin/scs
 Copying only the binary (without the SPM resource bundle/dir) breaks `scs init`
 with a “could not load resource bundle” fatal error.
 
-> **Also planned:** Linux distro packages (#61), Windows installer (#62).
+> **Also planned:** Linux distro packages ([#9](https://github.com/jacobmbarnard/specticus/issues/9)), Windows installer ([#10](https://github.com/jacobmbarnard/specticus/issues/10)).
 
 ## Quick Start
 
@@ -164,7 +164,7 @@ Avoid `--assign-ids` in CI or shared checkouts unless that is intentional. Prefe
 | `clean`              | Remove generated output                                          |
 | `ids assign`         | Assign missing IDs (rewrites Markdown; use `--dry-run` / `--yes`) |
 | `ids status`         | Report ids.json lifecycle (live IDs, orphans, drift)             |
-| `ids accept-drift`   | Accept content drift for one ID (same-identity reword + audit)   |
+| `ids accept-drift`   | Accept content drift for one ID (same-identity reword after review)   |
 | `ids prune-orphans`  | Remove orphan bindings (counters never decrease)                 |
 | `ids`                | Manage traceability IDs (group command)                          |
 
