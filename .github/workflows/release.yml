@@ -1,8 +1,13 @@
 # Build prebuilt specticus binaries and attach them to a GitHub Release (#120).
 #
 # Triggers:
-#   - Push of tag matching v* (e.g. v0.1.0) → package + attach to Release
-#   - workflow_dispatch → package only (workflow artifacts; no Release upload)
+#   - Push of tag matching v* (e.g. v0.1.0) → package + verify + attach
+#   - pull_request on this workflow / packaging script → package + verify only
+#   - workflow_dispatch → package + verify; set attach_to_tag (e.g. v0.2.1)
+#     to upload onto an existing GitHub Release
+#
+# Linux archives use --static-swift-stdlib (the "fuller" binary) via
+# scripts/package-release.sh so they run without a Swift toolchain.
 #
 # See docs/binaries.md and scripts/package-release.sh.
 
@@ -12,13 +17,24 @@ on:
   push:
     tags:
       - "v*"
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - "scripts/package-release.sh"
+      - "docs/binaries.md"
   workflow_dispatch:
+    inputs:
+      attach_to_tag:
+        description: "Existing tag to attach archives to (e.g. v0.2.1). Leave empty to package only."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-binaries-${{ github.ref }}
+  group: release-binaries-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -29,11 +45,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # Same selection as ci.yml: prefer Xcode 26.3, else newest Xcode_26*.app.
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.3.app
-
-      - name: Toolchain
         run: |
+          set -euo pipefail
+          if [ -d /Applications/Xcode_26.3.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.3.app
+          else
+            app="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)"
+            if [ -z "${app:-}" ]; then
+              echo "No Xcode 26.app found:" >&2
+              ls /Applications | grep -i xcode || true
+              exit 1
+            fi
+            echo "Xcode_26.3.app not found; using $app"
+            sudo xcode-select -s "$app"
+          fi
+          xcode-select -p
+          xcodebuild -version
           swift --version
           uname -m
 
@@ -84,6 +113,7 @@ jobs:
   # Best-effort: arm runners / minutes may be unavailable on some plans.
   package-linux-arm64:
     name: package (linux-arm64)
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04-arm
     continue-on-error: true
     container:
@@ -112,17 +142,92 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  # Confirm the tarball runs on the same class of Mac as a download user.
+  verify-macos:
+    name: verify (macos-arm64 tarball)
+    needs: package-macos
+    runs-on: macos-15
+    steps:
+      - name: Download macos-arm64 archive
+        uses: actions/download-artifact@v4
+        with:
+          name: specticus-macos-arm64
+          path: dist
+
+      - name: Run tarball
+        run: |
+          set -euo pipefail
+          tar -xzf dist/specticus-*-macos-arm64.tar.gz
+          dir="$(echo specticus-*-macos-arm64)"
+          test -d "$dir"
+          test -x "$dir/bin/scs"
+          test -x "$dir/libexec/scs"
+          echo "==> --version"
+          "$dir/bin/scs" --version
+          echo "==> init"
+          tmp="$(mktemp -d)"
+          "$dir/bin/scs" init "$tmp/demo"
+          test -f "$tmp/demo/.specticus/config.yml"
+          echo "OK"
+
+  # Confirm the fuller (static-stdlib) Linux binary runs with no Swift image.
+  verify-linux-x86_64:
+    name: verify (linux-x86_64, no Swift)
+    needs: package-linux-x86_64
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download linux-x86_64 archive
+        uses: actions/download-artifact@v4
+        with:
+          name: specticus-linux-x86_64
+          path: dist
+
+      - name: Run tarball without a Swift toolchain
+        run: |
+          set -euo pipefail
+          command -v swift >/dev/null 2>&1 && echo "note: swift is on PATH (runner image); still not using a Swift container" || echo "no swift on PATH"
+          tar -xzf dist/specticus-*-linux-x86_64.tar.gz
+          dir="$(echo specticus-*-linux-x86_64)"
+          test -d "$dir"
+          echo "==> ldd"
+          ldd "$dir/libexec/scs"
+          if ldd "$dir/libexec/scs" | grep -E 'libswift|libFoundation|libdispatch'; then
+            echo "error: Linux binary still dynamically links Swift runtime libraries" >&2
+            exit 1
+          fi
+          if ldd "$dir/libexec/scs" | grep -F 'not found'; then
+            echo "error: missing shared libraries on stock Ubuntu 24.04" >&2
+            exit 1
+          fi
+          echo "==> --version"
+          "$dir/bin/scs" --version
+          echo "==> init"
+          tmp="$(mktemp -d)"
+          "$dir/bin/scs" init "$tmp/demo"
+          test -f "$tmp/demo/.specticus/config.yml"
+          echo "OK"
+
   publish:
     name: publish GitHub Release assets
-    needs: [package-macos, package-linux-x86_64, package-linux-arm64]
+    needs:
+      - package-macos
+      - package-linux-x86_64
+      - package-linux-arm64
+      - verify-macos
+      - verify-linux-x86_64
     runs-on: ubuntu-24.04
-    # Publish when required jobs succeeded; arm64 may have been skipped/failed.
+    # Publish on tag push, or workflow_dispatch with attach_to_tag.
+    # linux-arm64 is best-effort (skipped on PRs; may fail on tags).
     if: >
       always() &&
       !cancelled() &&
-      startsWith(github.ref, 'refs/tags/v') &&
+      github.event_name != 'pull_request' &&
+      (startsWith(github.ref, 'refs/tags/v') ||
+        (github.event_name == 'workflow_dispatch' && github.event.inputs.attach_to_tag != '')) &&
       needs.package-macos.result == 'success' &&
-      needs.package-linux-x86_64.result == 'success'
+      needs.package-linux-x86_64.result == 'success' &&
+      needs.verify-macos.result == 'success' &&
+      needs.verify-linux-x86_64.result == 'success'
     steps:
       - name: Download all package artifacts
         uses: actions/download-artifact@v4
@@ -137,10 +242,10 @@ jobs:
       - name: Attach assets to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.attach_to_tag || github.ref_name }}
+          name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.attach_to_tag || github.ref_name }}
           draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(github.event_name == 'workflow_dispatch' && github.event.inputs.attach_to_tag || github.ref_name, '-') }}
           generate_release_notes: true
           files: |
             artifacts/*.tar.gz

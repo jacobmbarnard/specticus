@@ -99,6 +99,8 @@ fi
 
 # Guardrail: refuse to ship a Linux binary that still needs the Swift toolchain.
 if [[ "${PLATFORM_ID}" == linux-* ]] && command -v ldd >/dev/null 2>&1; then
+  echo "    ldd:"
+  ldd "${RELEASE_DIR}/scs" 2>/dev/null || true
   if ldd "${RELEASE_DIR}/scs" 2>/dev/null | grep -E 'libswift|libFoundation|libdispatch' >/dev/null; then
     echo "error: Linux binary still dynamically links Swift runtime libraries:" >&2
     ldd "${RELEASE_DIR}/scs" 2>/dev/null | grep -E 'libswift|libFoundation|libdispatch' >&2 || true
@@ -106,6 +108,21 @@ if [[ "${PLATFORM_ID}" == linux-* ]] && command -v ldd >/dev/null 2>&1; then
     exit 1
   fi
   echo "    Linux dynamic deps: no libswift* (static stdlib OK)"
+fi
+
+# Guardrail: static stdlib ("fuller") Linux binaries are tens of MB.
+# The old dynamically linked artifact was ~2–3 MB and needs libswiftCore.so.
+if [[ "${PLATFORM_ID}" == linux-* ]]; then
+  if stat -c%s "${RELEASE_DIR}/scs" >/dev/null 2>&1; then
+    bin_size="$(stat -c%s "${RELEASE_DIR}/scs")"
+  else
+    bin_size="$(stat -f%z "${RELEASE_DIR}/scs")"
+  fi
+  echo "    binary size: ${bin_size} bytes"
+  if (( bin_size < 8000000 )); then
+    echo "error: Linux binary is only ${bin_size} bytes; expected a static-stdlib (fuller) build" >&2
+    exit 1
+  fi
 fi
 
 echo "==> Staging binary and SPM resources from ${RELEASE_DIR}"
