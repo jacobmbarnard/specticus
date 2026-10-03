@@ -1,3 +1,9 @@
+# Build and test on PRs to develop, and again on the merge commit
+# (push to develop). Same routine as the original #51 workflow.
+#
+# The revived GitHub repo had the file in git but Actions had never
+# registered a workflow run. Changing this file on a PR/merge re-registers it.
+
 name: CI
 
 on:
@@ -5,25 +11,73 @@ on:
     branches: [develop]
   pull_request:
     branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-and-test:
+  build-and-test-macos:
+    name: build-and-test (macos)
     runs-on: macos-15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v5
 
-      # Package.swift requires Swift tools 6.2+. Use the preinstalled Xcode
-      # (avoids swift-actions/setup-swift Node 20 deprecation + limited version list).
+      # Package.swift requires Swift tools 6.2+. Prefer the Xcode already on
+      # the runner (avoids swift-actions/setup-swift Node 20 + limited versions).
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.3.app
+        run: |
+          set -euo pipefail
+          if [ -d /Applications/Xcode_26.3.app ]; then
+            sudo xcode-select -s /Applications/Xcode_26.3.app
+          else
+            app="$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1 || true)"
+            if [ -z "${app:-}" ]; then
+              echo "No Xcode 26.app found:" >&2
+              ls /Applications | grep -i xcode || true
+              exit 1
+            fi
+            echo "Xcode_26.3.app not found; using $app"
+            sudo xcode-select -s "$app"
+          fi
+          xcode-select -p
+          xcodebuild -version
+          swift --version
+
+      - name: Build
+        run: swift build
+
+      - name: Test
+        run: swift test
+
+  # Linux is a first-class install target (release.yml / GitHub Release tarballs).
+  build-and-test-linux:
+    name: build-and-test (linux)
+    runs-on: ubuntu-24.04
+    container:
+      image: swift:6.2
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
 
       - name: Swift version
         run: swift --version
 
       - name: Build
         run: swift build
+
+      # `scs open` / SystemBrowser.launchSpec look up xdg-open on Linux.
+      - name: Install xdg-utils
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends xdg-utils
 
       - name: Test
         run: swift test
