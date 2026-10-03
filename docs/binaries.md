@@ -29,9 +29,9 @@ a newer artifact.
 Not automated yet (use source / Homebrew / local `scripts/package-release.sh`):
 
 - **macOS Intel (x86_64)** — no dedicated CI runner in this pipeline
-- **Windows** — tracked under [#62](https://github.com/jacobmbarnard/specticus/issues/62)
+- **Windows** — tracked under [#10](https://github.com/jacobmbarnard/specticus/issues/10)
 - **musl / Alpine** — not supported by this glibc matrix
-- **Linux packages** (`.deb` / `.rpm`) — [#61](https://github.com/jacobmbarnard/specticus/issues/61)
+- **Linux packages** (`.deb` / `.rpm`) — [#9](https://github.com/jacobmbarnard/specticus/issues/9)
 
 Artifact names:
 
@@ -101,10 +101,16 @@ tarballs.
 Automation: [`.github/workflows/release.yml`](../.github/workflows/release.yml)
 
 - On push of tag `vX.Y.Z`, the workflow builds each matrix target, packages with
-  [`scripts/package-release.sh`](../scripts/package-release.sh), and attaches
-  `.tar.gz` + `.sha256` files to the GitHub Release for that tag.
-- Manual dry-run: **Actions → Release binaries → Run workflow** (`dry_run: true`)
-  uploads workflow artifacts only.
+  [`scripts/package-release.sh`](../scripts/package-release.sh), **verifies** the
+  macOS and Linux x86_64 tarballs (`scs --version` / `scs init`; Linux on a
+  runner **without** the `swift:` container), and attaches `.tar.gz` + `.sha256`
+  files to the GitHub Release for that tag.
+- Linux packaging uses `--static-swift-stdlib` (the fuller binary) so the
+  archive runs on glibc systems that do not have a Swift toolchain.
+- Manual dry-run: **Actions → Release binaries → Run workflow** with
+  `attach_to_tag` empty uploads workflow artifacts only.
+- Backfill an existing tag (e.g. after a repo recreate with empty Release
+  assets): **Run workflow** and set `attach_to_tag` to `vX.Y.Z`.
 
 Local package (e.g. on a Mac):
 

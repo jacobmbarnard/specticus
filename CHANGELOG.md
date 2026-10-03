@@ -29,6 +29,9 @@ as described in [docs/release-process.md](docs/release-process.md).
 - `ids assign` no longer mints owning IDs on structural section / vertical
   titles (e.g. `# Business Requirements`, `# Technical Specifications`) (#151);
   child requirement headings still get IDs as before
+- Release binaries workflow: register and run packaging for macOS arm64 and
+  Linux x86_64; Linux still ships the fuller `--static-swift-stdlib` binary
+  and is smoke-tested on a runner without a Swift container (#120)
 
 ## [0.2.1] - 2026-08-19
 
