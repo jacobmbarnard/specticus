@@ -73,5 +73,11 @@ jobs:
       - name: Build
         run: swift build
 
+      # `scs open` / SystemBrowser.launchSpec look up xdg-open on Linux.
+      - name: Install xdg-utils
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends xdg-utils
+
       - name: Test
         run: swift test
