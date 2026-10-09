@@ -134,6 +134,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
         var tocEnabled: Bool
         /// Maximum heading level included in the TOC (0 = off via disable, default 3, max 6).
         var tocMaxLevel: Int
+        /// Default path for `scs export markdown` (derived GFM monolith; #5).
+        var markdownExport: String
 
         enum CodingKeys: String, CodingKey {
             case defaultInput = "default_input"
@@ -146,6 +148,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             case headingNumberMaxLevel = "heading_number_max_level"
             case tocEnabled = "toc"
             case tocMaxLevel = "toc_max_level"
+            case markdownExport = "markdown_export"
         }
 
         init(
@@ -158,7 +161,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             trackBuilds: Bool = true,
             headingNumberMaxLevel: Int = HeadingNumberer.defaultMaxLevel,
             tocEnabled: Bool = true,
-            tocMaxLevel: Int = TableOfContents.defaultMaxLevel
+            tocMaxLevel: Int = TableOfContents.defaultMaxLevel,
+            markdownExport: String = MarkdownExporter.defaultOutputPath
         ) {
             self.defaultInput = defaultInput
             self.output = output
@@ -170,6 +174,7 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             self.headingNumberMaxLevel = HeadingNumberer.clampMaxLevel(headingNumberMaxLevel)
             self.tocEnabled = tocEnabled
             self.tocMaxLevel = TableOfContents.clampMaxLevel(tocMaxLevel)
+            self.markdownExport = markdownExport
         }
 
         init(from decoder: Decoder) throws {
@@ -188,6 +193,8 @@ struct SpecticusConfig: Codable, Equatable, Sendable {
             let rawToc = try container.decodeIfPresent(Int.self, forKey: .tocMaxLevel)
                 ?? TableOfContents.defaultMaxLevel
             tocMaxLevel = TableOfContents.clampMaxLevel(rawToc)
+            markdownExport = try container.decodeIfPresent(String.self, forKey: .markdownExport)
+                ?? MarkdownExporter.defaultPathBesideHTML(output)
         }
     }
 

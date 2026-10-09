@@ -23,6 +23,7 @@ build:
   heading_number_max_level: 3
   toc: true
   toc_max_level: 3
+  markdown_export: "output/export.md"
 
 decision_records:
   adrs_enabled: true

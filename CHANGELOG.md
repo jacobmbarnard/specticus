@@ -10,6 +10,9 @@ as described in [docs/release-process.md](docs/release-process.md).
 
 ### Added
 
+- `scs export markdown` — derived GitHub-flavored Markdown monolith for PRs /
+  review (`output/export.md` by default); sources stay canonical; owning IDs
+  kept in headings; Contents + asset path rewrites (#5 / old #102)
 - Assembly layout config (#140): `.specticus/layout.yml` + optional
   `assembly.sections` in config.yml for section order and per-folder sort
   (`lexical`, `reverse_lexical`, `alphanumeric`)
