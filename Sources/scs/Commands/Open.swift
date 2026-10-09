@@ -20,7 +20,7 @@ struct Open: ParsableCommand {
     var output: String?
 
     func run() throws {
-        let project = try SpecticusProject.load()
+        let project = try CommandBoundary.call { try SpecticusProject.load() }
         let relativePath = OpenHTML.resolvedRelativePath(
             outputOverride: output,
             defaultOutput: project.defaultOutputPath

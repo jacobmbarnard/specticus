@@ -1,6 +1,5 @@
 import Ink
 import Foundation
-import ArgumentParser
 
 // Core generation logic for turning Markdown into styled HTML output.
 // Expanded for #3: multi-file Markdown assembly in lex order.
@@ -116,7 +115,7 @@ struct DocumentGenerator {
         if let input = input {
             let inputURL = URL(fileURLWithPath: input, relativeTo: baseURL).standardized
             guard fm.fileExists(atPath: inputURL.path) else {
-                throw ValidationError("Input file not found: \(input).")
+                throw SpecticusError.missingInput(path: input)
             }
             return try String(contentsOf: inputURL, encoding: .utf8)
         }
@@ -133,7 +132,7 @@ struct DocumentGenerator {
                     return try String(contentsOf: url, encoding: .utf8)
                 }
             }
-            throw ValidationError("No Markdown files found to assemble (looked for *.md / *.markdown). Specify --input or add content files.")
+            throw SpecticusError.noMarkdownSources
         }
 
         let parts = try mdFiles.map { try String(contentsOf: $0, encoding: .utf8) }

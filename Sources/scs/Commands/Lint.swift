@@ -12,7 +12,7 @@ struct Lint: ParsableCommand {
     func run() throws {
         let fm = FileManager.default
         let cwd = fm.currentDirectoryPath
-        let project = try SpecticusProject.load(from: cwd)
+        let project = try CommandBoundary.call { try SpecticusProject.load(from: cwd) }
 
         print("🔍 Running scs lint...\n")
 
@@ -227,12 +227,14 @@ struct Lint: ParsableCommand {
 
         // --- Build readiness (lightweight check)
         do {
-            _ = try DocumentGenerator.assembleSources(
-                input: nil,
-                baseDirectory: cwd,
-                fallbackInput: project.config.build.defaultInput,
-                layout: project.assemblyLayout
-            )
+            _ = try CommandBoundary.call {
+                try DocumentGenerator.assembleSources(
+                    input: nil,
+                    baseDirectory: cwd,
+                    fallbackInput: project.config.build.defaultInput,
+                    layout: project.assemblyLayout
+                )
+            }
             ok("Markdown sources assemble successfully (layout order / single file)")
         } catch {
             fail("Markdown sources failed to assemble",

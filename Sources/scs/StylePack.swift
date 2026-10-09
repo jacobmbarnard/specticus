@@ -1,5 +1,4 @@
 import Foundation
-import ArgumentParser
 
 // MARK: - Style packs / multi-template registry (#141)
 
@@ -76,17 +75,17 @@ enum StylePackRegistry {
     static func skeletonURL(forPackID id: String = defaultPackID) throws -> URL {
         guard let pack = pack(id: id) else {
             let known = builtInIDs.joined(separator: ", ")
-            throw ValidationError(
-                "Unknown documentation style '\(id)'. Built-in styles: \(known)."
-            )
+            throw SpecticusError.unknownStylePack(id: id, known: known)
         }
         guard let url = Bundle.module.url(
             forResource: pack.resourceDirectory,
             withExtension: nil,
             subdirectory: pack.resourceParent
         ) else {
-            throw ValidationError(
-                "Internal error: style pack '\(pack.id)' resources not found (\(pack.resourceParent)/\(pack.resourceDirectory))."
+            throw SpecticusError.missingBundledResources(
+                packID: pack.id,
+                resourceParent: pack.resourceParent,
+                resourceDirectory: pack.resourceDirectory
             )
         }
         return url

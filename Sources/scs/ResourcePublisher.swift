@@ -1,5 +1,4 @@
 import Foundation
-import ArgumentParser
 
 // MARK: - Resource publishing (implements #9)
 

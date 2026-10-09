@@ -31,7 +31,7 @@ struct ExportMarkdown: ParsableCommand {
     var skipToc: Bool = false
 
     func run() throws {
-        let project = try SpecticusProject.load()
+        let project = try CommandBoundary.call { try SpecticusProject.load() }
 
         for warning in project.warnings {
             print("⚠️  \(warning)")
@@ -45,16 +45,18 @@ struct ExportMarkdown: ParsableCommand {
             print("⚠️  \(unknownStyle)")
         }
 
-        let result = try MarkdownExporter.export(
-            project: project,
-            options: MarkdownExporter.Options(
-                input: input,
-                output: output,
-                skipAssets: skipAssets,
-                skipHeadingNumbers: skipHeadingNumbers,
-                skipToc: skipToc
+        let result = try CommandBoundary.call {
+            try MarkdownExporter.export(
+                project: project,
+                options: MarkdownExporter.Options(
+                    input: input,
+                    output: output,
+                    skipAssets: skipAssets,
+                    skipHeadingNumbers: skipHeadingNumbers,
+                    skipToc: skipToc
+                )
             )
-        )
+        }
 
         if result.copiedAssetCount > 0 {
             print(

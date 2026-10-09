@@ -26,7 +26,7 @@ struct IdsStatus: ParsableCommand {
     )
 
     func run() throws {
-        let project = try SpecticusProject.load()
+        let project = try CommandBoundary.call { try SpecticusProject.load() }
         for warning in project.warnings {
             print("⚠️  \(warning)")
         }

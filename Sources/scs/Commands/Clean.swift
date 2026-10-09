@@ -15,7 +15,7 @@ struct Clean: ParsableCommand {
 
     func run() throws {
         let fm = FileManager.default
-        let project = try SpecticusProject.load()
+        let project = try CommandBoundary.call { try SpecticusProject.load() }
         var removed = 0
 
         let configured = project.defaultOutputPath
