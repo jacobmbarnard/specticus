@@ -25,7 +25,8 @@ Writing specifications in Markdown keeps them close to the code and under versio
 - **Specifications as code** — Author in plain Markdown, generate beautiful HTML
 - **Traceability IDs** — Stable, human-readable identifiers (`BR1`, `TS2`, etc.) with drift detection; authored inline in Markdown headings, rendered as subtle HTML chips (#149)
 - **Clean output** — Light/dark theme support, printable, well-structured HTML
-- **Powerful CLI** — `scs` with `init`, `build`, `open`, `lint`, `clean`, and `ids` subcommands
+- **Powerful CLI** — `scs` with `init`, `build`, `open`, `lint`, `clean`, `ids`, and `export` subcommands
+- **GFM export** — `scs export markdown` writes a derived review monolith (`output/export.md`); sources stay canonical (#5)
 - **Fast** — Written in Swift with minimal dependencies
 
 **Using IDs for the first time?** Read **[Traceability IDs: recommended workflow and common pitfalls](docs/traceability-ids.md)** — syntax, when to assign vs lint vs build, drift, orphans, team patterns, and recovery recipes (#41).
@@ -167,8 +168,9 @@ Avoid `--assign-ids` in CI or shared checkouts unless that is intentional. Prefe
 | `ids accept-drift`   | Accept content drift for one ID (same-identity reword after review)   |
 | `ids prune-orphans`  | Remove orphan bindings (counters never decrease)                 |
 | `ids`                | Manage traceability IDs (group command)                          |
+| `export markdown`    | Write derived GFM monolith for review (`output/export.md`; #5)   |
 
-Run `scs --help` or `scs <command> --help` for details.
+Run `scs --help` or `scs <command> --help` for details. See **[docs/export.md](docs/export.md)** for GFM export.
 
 ## How It Works
 

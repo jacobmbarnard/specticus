@@ -32,7 +32,8 @@ struct Specticus: ParsableCommand {
             Lint.self,
             Clean.self,
             Open.self,
-            Ids.self
+            Ids.self,
+            Export.self
         ],
         defaultSubcommand: Build.self
     )

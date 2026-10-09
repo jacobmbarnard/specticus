@@ -7,7 +7,8 @@ struct Clean: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Remove generated output files and directories.",
         discussion: """
-        Removes the configured HTML output and its structured asset tree (css/, img/, svg/) when present. \
+        Removes the configured HTML output and its structured asset tree (css/, img/, svg/) when present, \
+        including a derived GFM export under the same output directory (`scs export markdown`, #5). \
         Does not reset `.specticus/build-number.yml` (#8). See `.specticus/config.yml` build.output and issue #9.
         """
     )
