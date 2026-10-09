@@ -24,6 +24,9 @@ as described in [docs/release-process.md](docs/release-process.md).
 
 ### Changed
 
+- Library failures (`DocumentGenerator`, `SpecticusProject`, style packs) throw
+  `SpecticusError`. Commands translate that to the same validation text as
+  before (#17)
 - `.specticus/layout.yml` is the pack’s complete section map when present
   (non-default packs are not padded with Path A verticals) (#141)
 

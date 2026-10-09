@@ -54,7 +54,7 @@ struct Build: ParsableCommand {
     var assignIds: Bool = false
 
     func run() throws {
-        let project = try SpecticusProject.load()
+        let project = try CommandBoundary.call { try SpecticusProject.load() }
 
         for warning in project.warnings {
             print("⚠️  \(warning)")
@@ -68,12 +68,14 @@ struct Build: ParsableCommand {
             print("⚠️  \(unknownStyle)")
         }
 
-        var markdown = try DocumentGenerator.assembleSources(
-            input: input,
-            baseDirectory: project.root.path,
-            fallbackInput: project.config.build.defaultInput,
-            layout: project.assemblyLayout
-        )
+        var markdown = try CommandBoundary.call {
+            try DocumentGenerator.assembleSources(
+                input: input,
+                baseDirectory: project.root.path,
+                fallbackInput: project.config.build.defaultInput,
+                layout: project.assemblyLayout
+            )
+        }
 
         // Hierarchical section numbers (#4) — independent of traceability IDs (#6).
         let headingMax = skipHeadingNumbers ? 0 : project.config.build.headingNumberMaxLevel

@@ -53,7 +53,9 @@ struct Init: ParsableCommand {
             try fm.createDirectory(atPath: targetDir, withIntermediateDirectories: true)
         }
 
-        let skeletonURL = try StylePackRegistry.skeletonURL(forPackID: resolved.id)
+        let skeletonURL = try CommandBoundary.call {
+            try StylePackRegistry.skeletonURL(forPackID: resolved.id)
+        }
 
         let targetURL = URL(fileURLWithPath: targetDir)
         try copySkeleton(

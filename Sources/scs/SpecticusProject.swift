@@ -1,5 +1,4 @@
 import Foundation
-import ArgumentParser
 
 // MARK: - Project paths & config resolution (implements #7)
 
@@ -134,8 +133,9 @@ struct SpecticusProject: Sendable {
                 config = try SpecticusConfig.load(from: configURL)
                 source = .file
             } catch {
-                throw ValidationError(
-                    "Failed to parse \(hiddenDirectoryName)/\(configFileName): \(error.localizedDescription)"
+                throw SpecticusError.invalidConfig(
+                    path: "\(hiddenDirectoryName)/\(configFileName)",
+                    reason: error.localizedDescription
                 )
             }
         } else {
