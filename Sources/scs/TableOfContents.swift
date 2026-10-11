@@ -44,31 +44,21 @@ enum TableOfContents {
     // MARK: - Extraction
 
     /// Parse ATX headings from markdown (skips fenced code). Assigns unique ids for levels ≤ maxLevel.
+    /// Fence skipping and ATX parse come from `MarkdownDocument` (#18).
     static func extractHeadings(from markdown: String, maxLevel: Int) -> [Heading] {
         let maxLevel = clampMaxLevel(maxLevel)
         var results: [Heading] = []
         var usedIDs = Set<String>()
-        var inFence = false
 
-        let lines = markdown.split(separator: "\n", omittingEmptySubsequences: false)
-        for raw in lines {
-            var line = String(raw)
-            if line.hasSuffix("\r") { line = String(line.dropLast()) }
-
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
-                inFence.toggle()
-                continue
-            }
-            if inFence { continue }
-
-            guard let (level, text) = parseATXHeading(line) else { continue }
-            let parts = TraceabilityChips.parts(from: text)
+        for line in MarkdownDocument.parse(markdown).lines {
+            if line.isFenceDelimiter || line.inFence { continue }
+            guard let atx = line.heading else { continue }
+            let parts = TraceabilityChips.parts(from: atx.text)
             let display = parts.visibleHeadingText
-            let id: String? = (maxLevel > 0 && level <= maxLevel)
-                ? uniqueSlug(base: TraceabilityChips.preferredAnchorBase(from: text), used: &usedIDs)
+            let id: String? = (maxLevel > 0 && atx.level <= maxLevel)
+                ? uniqueSlug(base: TraceabilityChips.preferredAnchorBase(from: atx.text), used: &usedIDs)
                 : nil
-            results.append(Heading(level: level, text: display, id: id))
+            results.append(Heading(level: atx.level, text: display, id: id))
         }
         return results
     }
@@ -152,24 +142,6 @@ enum TableOfContents {
     }
 
     // MARK: - Helpers
-
-    private static func parseATXHeading(_ line: String) -> (level: Int, text: String)? {
-        guard let regex = try? NSRegularExpression(pattern: #"^\s*(#{1,6})\s+(.*)$"#) else {
-            return nil
-        }
-        let ns = line as NSString
-        guard let m = regex.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) else {
-            return nil
-        }
-        let hashes = ns.substring(with: m.range(at: 1))
-        var text = ns.substring(with: m.range(at: 2))
-        if let trail = text.range(of: #"\s+#+\s*$"#, options: .regularExpression) {
-            text = String(text[..<trail.lowerBound])
-        }
-        text = text.trimmingCharacters(in: .whitespaces)
-        guard !text.isEmpty else { return nil }
-        return (hashes.count, text)
-    }
 
     static func slugify(_ text: String) -> String {
         let lowered = text.lowercased()

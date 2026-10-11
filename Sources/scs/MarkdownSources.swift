@@ -160,31 +160,17 @@ enum MarkdownSources {
         return url.lastPathComponent
     }
 
-    // MARK: Shared line primitives (fence / ATX)
+    // MARK: Shared line primitives (fence / ATX) — delegated to MarkdownDocument (#18)
 
     /// True when a trimmed line opens or closes a fenced code block (``` or ~~~).
     static func isFenceDelimiter(_ trimmedLine: String) -> Bool {
-        trimmedLine.hasPrefix("```") || trimmedLine.hasPrefix("~~~")
+        MarkdownDocument.isFenceDelimiter(trimmedLine)
     }
 
     /// Parse an ATX heading (`#`…`######` + title). Returns level and title text.
     /// Trailing `#` decorations are stripped from the title (GFM-style).
     static func parseATXHeading(_ line: String) -> (level: Int, title: String)? {
-        guard let regex = try? NSRegularExpression(pattern: #"^\s*(#{1,6})\s+(.*)$"#) else {
-            return nil
-        }
-        let ns = line as NSString
-        guard let m = regex.firstMatch(in: line, range: NSRange(location: 0, length: ns.length)) else {
-            return nil
-        }
-        let hashes = ns.substring(with: m.range(at: 1))
-        var title = ns.substring(with: m.range(at: 2))
-        if let trail = title.range(of: #"\s+#+\s*$"#, options: .regularExpression) {
-            title = String(title[..<trail.lowerBound])
-        }
-        title = title.trimmingCharacters(in: .whitespaces)
-        guard !title.isEmpty else { return nil }
-        return (hashes.count, title)
+        MarkdownDocument.parseATXHeading(line).map { ($0.level, $0.text) }
     }
 }
 
