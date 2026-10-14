@@ -38,7 +38,8 @@ import Glibc
 // - Optional git dirty-path hints from #35 remain convenience-only and are not required.
 
 enum IdsManager {
-    static let knownPrefixes: [String] = ["BR", "TS", "UC", "ADR", "BDR", "TC", "BC", "REF", "DIAG", "REV"]
+    /// Known ID prefixes — sourced from `PrefixCatalog` (#19).
+    static var knownPrefixes: [String] { PrefixCatalog.prefixes }
 
     struct IdStore: Codable, Equatable, Sendable {
         var version: Int = 1
@@ -1693,10 +1694,14 @@ enum IdsManager {
     /// 2. Section filename (skeleton `00N-technical-specifications.md`, etc.)
     /// 3. Dominant prefix already used by other owned IDs in the same file (sibling context)
     private static func resolvePrefix(for heading: HeadingInfo, fileContextPrefix: String?) -> String? {
-        if let fromContent = inferPrefixFromContent(heading.content) {
+        // Exact section titles are not content keywords (assign also skips these structurally).
+        let normalized = normalizeHeadingTitle(HeadingNumberer.stripOutlinePrefix(from: heading.content))
+        if !structuralSectionTitles.contains(normalized),
+           let fromContent = PrefixCatalog.inferFromTitle(heading.content)
+        {
             return fromContent
         }
-        if let fromFile = inferPrefixFromFilename(heading.file.lastPathComponent) {
+        if let fromFile = PrefixCatalog.inferFromFilename(heading.file.lastPathComponent) {
             return fromFile
         }
         return fileContextPrefix
@@ -1831,117 +1836,6 @@ enum IdsManager {
         return scaled
             .split(whereSeparator: { $0.isWhitespace })
             .joined(separator: " ")
-    }
-
-    /// Infer prefix from heading descriptive text only (not filenames).
-    private static func inferPrefixFromContent(_ text: String) -> String? {
-        // Exact section titles are not content keywords (assign also skips these structurally).
-        let normalized = normalizeHeadingTitle(HeadingNumberer.stripOutlinePrefix(from: text))
-        if structuralSectionTitles.contains(normalized) {
-            return nil
-        }
-        let lower = text.lowercased()
-
-        if lower.contains("business requirement") || lower.contains("requirement") || lower.contains("shall ") {
-            return "BR"
-        }
-        if lower.contains("technical specification") || lower.contains("specification") {
-            return "TS"
-        }
-        if lower.contains("use case") {
-            return "UC"
-        }
-        if lower.contains("test case") || lower.contains("test plan") {
-            return "TC"
-        }
-        if lower.contains("technical constraint") {
-            return "TC"
-        }
-        if lower.contains("business constraint") || lower.contains("constraint") {
-            return "BC"
-        }
-        if lower.contains("business decision") || lower.contains("bdr") {
-            return "BDR"
-        }
-        if lower.contains("architecture decision") || lower.contains("adr") || lower.contains("decision") {
-            return "ADR"
-        }
-        if lower.contains("diagram") {
-            return "DIAG"
-        }
-        if lower.contains("revision") {
-            return "REV"
-        }
-        return nil
-    }
-
-    /// Infer prefix from a Markdown filename (skeleton section names and common aliases).
-    private static func inferPrefixFromFilename(_ filename: String) -> String? {
-        var base = filename.lowercased()
-        if let dot = base.lastIndex(of: ".") {
-            base = String(base[..<dot])
-        }
-        // Normalize separators so both "technical-specifications" and "technical_specifications" match.
-        let normalized = base.replacingOccurrences(of: "_", with: "-")
-
-        // Most specific patterns first (skeleton 00N-* names).
-        if normalized.contains("business-requirement") || normalized.contains("business-requirements") {
-            return "BR"
-        }
-        if normalized.contains("technical-specification")
-            || normalized.contains("technical-specifications")
-            || normalized.contains("technical-spec")
-            || normalized.contains("tech-spec") {
-            return "TS"
-        }
-        if normalized.contains("business-constraint") || normalized.contains("business-constraints") {
-            return "BC"
-        }
-        if normalized.contains("technical-constraint") || normalized.contains("technical-constraints") {
-            return "TC"
-        }
-        if normalized.contains("use-case") || normalized.contains("use-cases") {
-            return "UC"
-        }
-        if normalized.contains("test-plan") || normalized.contains("test-case") || normalized.contains("test-cases") {
-            return "TC"
-        }
-        if normalized.contains("business-decision") || normalized.contains("bdr") {
-            return "BDR"
-        }
-        if normalized.contains("architecture") || normalized.contains("-adr") || normalized.hasPrefix("adr") {
-            return "ADR"
-        }
-        if normalized.contains("diagram") {
-            return "DIAG"
-        }
-        if normalized.contains("revision") {
-            return "REV"
-        }
-        // Weaker filename fallbacks (still useful for non-skeleton layouts).
-        if normalized.contains("requirement") {
-            return "BR"
-        }
-        if normalized.contains("specification") || normalized.hasSuffix("-specs")
-            || normalized.hasSuffix("-spec") || normalized == "specs" || normalized == "spec" {
-            return "TS"
-        }
-        if normalized.contains("constraint") {
-            return "BC"
-        }
-        return nil
-    }
-
-    /// Legacy entry used by tests / call sites that pass free-form text (content or filename).
-    private static func inferPrefix(from text: String) -> String? {
-        // Prefer content-style matching; if it looks like a filename, try filename rules too.
-        if let fromContent = inferPrefixFromContent(text) {
-            return fromContent
-        }
-        if text.contains(".") || text.contains("-") || text.contains("_") || text.contains("/") {
-            return inferPrefixFromFilename(text)
-        }
-        return nil
     }
 
     // MARK: - Drift comparison (#36)
