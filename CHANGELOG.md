@@ -24,6 +24,9 @@ as described in [docs/release-process.md](docs/release-process.md).
 
 ### Changed
 
+- One Markdown document pass: `MarkdownDocument` walks fences, blockquotes,
+  HTML comments, tables, and ATX headings once; `HeadingNumberer`,
+  `TableOfContents`, and `IdsManager` consume that model (#18)
 - Library failures (`DocumentGenerator`, `SpecticusProject`, style packs) throw
   `SpecticusError`. Commands translate that to the same validation text as
   before (#17)

@@ -202,6 +202,7 @@ enum IdsManager {
     /// Records ATX headings in content files, including those in exclusion zones and
     /// deeper than `ids.heading_max_level`, with a reason when they cannot own an ID.
     /// Eligible observations (`.info != nil`) match historical `collectHeadings` behavior.
+    /// Region flags and ATX recovery come from `MarkdownDocument` (#18).
     static func scanHeadings(project: SpecticusProject) throws -> HeadingScan {
         let maxLevel = SpecticusConfig.IdsSection.clampHeadingMaxLevel(
             project.config.ids.headingMaxLevel
@@ -216,57 +217,24 @@ enum IdsManager {
 
         for file in mdFiles {
             let raw = try String(contentsOf: file, encoding: .utf8)
-            let lines = raw.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+            let document = MarkdownDocument.parse(raw)
 
-            var inFence = false
-            var inComment = false
+            for (idx, line) in document.lines.enumerated() {
+                // Fence delimiters and HTML-comment lines are not observed (#30).
+                if line.isFenceDelimiter || line.inHTMLComment { continue }
+                guard let atx = line.recoveredHeading else { continue }
 
-            for (idx, line) in lines.enumerated() {
-                let trimmed = line.trimmingCharacters(in: .whitespaces)
-
-                if MarkdownSources.isFenceDelimiter(trimmed) {
-                    inFence.toggle()
-                    continue
-                }
-
-                if trimmed.hasPrefix("<!--") {
-                    inComment = true
-                    if trimmed.contains("-->") {
-                        inComment = false
-                    }
-                    continue
-                }
-                if inComment {
-                    if trimmed.contains("-->") {
-                        inComment = false
-                    }
-                    // Headings inside HTML comments are not parsed as body content.
-                    continue
-                }
-
-                // Classify exclusion context, then try to recover an ATX heading line to observe.
                 var exclusion: HeadingSkipReason? = nil
-                var headingSource = line
-
-                if inFence {
+                if line.inFence {
                     exclusion = .insideCodeFence
-                    headingSource = line
-                } else if trimmed.hasPrefix(">") {
+                } else if line.inBlockquote {
                     exclusion = .insideBlockquote
-                    headingSource = String(trimmed.drop(while: { $0 == ">" || $0 == " " || $0 == "\t" }))
-                } else if trimmed.hasPrefix("|") {
+                } else if line.inTable {
                     exclusion = .insideTable
-                    // Only observe when a cell looks like a bare ATX heading.
-                    let unpiped = trimmed
-                        .trimmingCharacters(in: CharacterSet(charactersIn: "|"))
-                        .trimmingCharacters(in: .whitespaces)
-                    guard unpiped.hasPrefix("#") else { continue }
-                    headingSource = unpiped
                 }
 
-                guard let (level, title) = MarkdownSources.parseATXHeading(headingSource) else {
-                    continue
-                }
+                let level = atx.level
+                let title = atx.text
 
                 if exclusion == nil, level < minLevel || level > maxLevel {
                     exclusion = .deeperThanMaxLevel(level: level, maxLevel: maxLevel)
@@ -279,7 +247,7 @@ enum IdsManager {
                         info = HeadingInfo(
                             file: file,
                             lineIndex: idx,
-                            originalLine: line,
+                            originalLine: line.text,
                             level: level,
                             title: title,
                             id: id,
@@ -289,7 +257,7 @@ enum IdsManager {
                         info = HeadingInfo(
                             file: file,
                             lineIndex: idx,
-                            originalLine: line,
+                            originalLine: line.text,
                             level: level,
                             title: title,
                             id: nil,
@@ -304,7 +272,7 @@ enum IdsManager {
                     file: file,
                     lineIndex: idx,
                     level: level,
-                    originalLine: line,
+                    originalLine: line.text,
                     title: title,
                     exclusion: exclusion,
                     info: info
