@@ -5,6 +5,11 @@ import PackageDescription
 
 let package: Package = Package(
     name: "scs",
+    // Swift Regex (MarkdownDocument / #18) needs macOS 13+. Unspecified platforms
+    // left SPM on an older deployment target and broke the macOS CI build.
+    platforms: [
+        .macOS(.v13)
+    ],
     dependencies: [
         .package(url: "https://github.com/JohnSundell/Ink.git", from: "0.6.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
