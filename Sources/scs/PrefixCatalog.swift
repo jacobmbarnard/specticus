@@ -9,7 +9,7 @@ import Foundation
 /// covers both "test case" and "technical constraint" via separate rules.
 ///
 /// Structural section titles (`# Business Requirements`) are skipped by
-/// `IdsManager` before it calls into this catalog — not here.
+/// `IdsAssigner` before it calls into this catalog — not here.
 enum PrefixCatalog {
     /// Canonical prefix codes in historical order (listing + tie-break).
     static let prefixes: [String] = [

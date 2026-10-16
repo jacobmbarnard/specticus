@@ -47,13 +47,14 @@ struct IdsPruneOrphans: ParsableCommand {
             print("⚠️  \(warning)")
         }
         do {
-            _ = try IdsManager.pruneOrphans(
+            let result = try IdsAssigner.pruneOrphans(
                 project: project,
                 onlyID: id,
                 dryRun: dryRun,
                 note: note
             )
-        } catch let error as IdsManager.PruneOrphansError {
+            IdsReporter.printPruneOrphans(result)
+        } catch let error as IdsAssigner.PruneOrphansError {
             throw ValidationError(error.description)
         }
     }

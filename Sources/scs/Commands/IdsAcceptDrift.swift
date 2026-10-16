@@ -43,8 +43,9 @@ struct IdsAcceptDrift: ParsableCommand {
             print("⚠️  \(warning)")
         }
         do {
-            _ = try IdsManager.acceptDrift(project: project, id: id, note: note)
-        } catch let error as IdsManager.AcceptDriftError {
+            let result = try IdsAssigner.acceptDrift(project: project, id: id, note: note)
+            IdsReporter.printAcceptDrift(result)
+        } catch let error as IdsAssigner.AcceptDriftError {
             throw ValidationError(error.description)
         }
     }

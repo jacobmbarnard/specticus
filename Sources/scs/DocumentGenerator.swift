@@ -120,7 +120,7 @@ struct DocumentGenerator {
             return try String(contentsOf: inputURL, encoding: .utf8)
         }
 
-        // Multi-file discovery (#35 / #139 / #140): shared with IdsManager via MarkdownSources.
+        // Multi-file discovery (#35 / #139 / #140): shared with IdsScanner via MarkdownSources.
         let mdFiles = try MarkdownSources.discoverContentFiles(in: baseURL, layout: layout)
 
         if mdFiles.isEmpty {

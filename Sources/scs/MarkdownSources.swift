@@ -10,7 +10,7 @@ import Foundation
 //   lex by relative path within each section; also include leftover root `.md` files
 // - **Legacy flat layout:** top-level files only, lex by filename
 //
-// Used by `DocumentGenerator.assembleSources`, `IdsManager.collectHeadings`, and
+// Used by `DocumentGenerator.assembleSources`, `IdsScanner.collectHeadings`, and
 // any preflight that must see the same file set as assign/lint/build ID paths.
 
 enum MarkdownSources {
