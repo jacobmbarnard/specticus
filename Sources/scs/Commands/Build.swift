@@ -156,7 +156,7 @@ struct Build: ParsableCommand {
             )
 
             if collab.hasDuplicateIDs {
-                IdsManager.printDuplicateIDReport(hazards: collab, style: .warning)
+                IdsReporter.printDuplicateIDReport(hazards: collab, style: .warning)
                 print("   → HTML was still generated; resolve duplicates so IDs stay unique across the team.")
             }
 
@@ -183,7 +183,7 @@ struct Build: ParsableCommand {
 
         // Traceability assign during build (#38): report-only unless --assign-ids.
         // ids.auto_assign alone never mutates sources (CI / shared-repo foot-gun).
-        let assignMode = IdsManager.resolveBuildAssignMode(
+        let assignMode = IdsAssigner.resolveBuildAssignMode(
             autoAssign: project.config.ids.autoAssign,
             assignIdsFlag: assignIds
         )
@@ -195,7 +195,7 @@ struct Build: ParsableCommand {
                     """)
             }
             do {
-                try IdsManager.assignIDs(
+                try IdsReporter.performAssign(
                     project: project,
                     options: .forBuild(mode: assignMode)
                 )

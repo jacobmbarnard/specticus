@@ -3,7 +3,7 @@ import Foundation
 // MARK: - One Markdown document pass (internals #18)
 //
 // Single line walk produces region flags and ATX headings. HeadingNumberer,
-// TableOfContents, and IdsManager consume this model instead of each keeping
+// TableOfContents, and IdsScanner consume this model instead of each keeping
 // a private fence/heading walker. Parse with Swift Regex (no NSRegularExpression
 // in this pass). Later internals steps throw SpecticusError from new failures;
 // this type only models text.
@@ -35,7 +35,7 @@ struct MarkdownDocument: Equatable, Sendable {
         /// Standard ATX heading at the start of the line (after indent), if any.
         let heading: ATXHeading?
         /// Heading recovered for ID-scan observation (strips `>` / table pipes).
-        /// Nil on fence delimiters and HTML-comment lines (IdsManager does not observe those).
+        /// Nil on fence delimiters and HTML-comment lines (IdsScanner does not observe those).
         let recoveredHeading: ATXHeading?
     }
 

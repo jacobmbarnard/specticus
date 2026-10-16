@@ -29,7 +29,7 @@ enum TraceabilityChips {
             rest = String(text[range.upperBound...])
         }
 
-        if let (id, content) = IdsManager.parseOwningID(from: rest) {
+        if let (id, content) = IdsScanner.parseOwningID(from: rest) {
             return HeadingParts(
                 outlinePrefix: outlinePrefix,
                 owningID: id,
