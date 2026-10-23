@@ -30,6 +30,6 @@ struct IdsStatus: ParsableCommand {
         for warning in project.warnings {
             print("⚠️  \(warning)")
         }
-        try IdsManager.printStatus(project: project)
+        try IdsReporter.printStatus(project: project)
     }
 }

@@ -54,7 +54,7 @@ struct IdsAssign: ParsableCommand {
         for warning in project.warnings {
             print("⚠️  \(warning)")
         }
-        var options = IdsManager.AssignOptions(
+        var options = IdsAssigner.AssignOptions(
             dryRun: dryRun,
             assumeYes: yes || dryRun,
             showDiff: diff,
@@ -66,8 +66,8 @@ struct IdsAssign: ParsableCommand {
             options.assumeYes = true
         }
         do {
-            try IdsManager.assignIDs(project: project, options: options)
-        } catch let error as IdsManager.AssignAbort {
+            try IdsReporter.performAssign(project: project, options: options)
+        } catch let error as IdsAssigner.AssignAbort {
             throw ValidationError(error.description)
         }
     }
