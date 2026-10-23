@@ -68,20 +68,20 @@ struct Build: ParsableCommand {
             print("⚠️  \(unknownStyle)")
         }
 
-        var markdown = try CommandBoundary.call {
-            try DocumentGenerator.assembleSources(
-                input: input,
-                baseDirectory: project.root.path,
-                fallbackInput: project.config.build.defaultInput,
-                layout: project.assemblyLayout
-            )
-        }
+        let outputPath = output ?? project.defaultOutputPath
+        let pipelineOptions = DocumentPipeline.Options(
+            input: input,
+            skipHeadingNumbers: skipHeadingNumbers,
+            skipAssets: skipAssets,
+            outputHTMLPath: outputPath
+        )
 
-        // Hierarchical section numbers (#4) — independent of traceability IDs (#6).
-        let headingMax = skipHeadingNumbers ? 0 : project.config.build.headingNumberMaxLevel
-        if headingMax > 0 {
-            markdown = HeadingNumberer.numberHeadings(in: markdown, maxLevel: headingMax)
+        // Assemble + number first so build tracking still runs before asset publish
+        // (same order as before the shared pipeline).
+        let assembled = try CommandBoundary.call {
+            try DocumentPipeline.assembleAndNumber(project: project, options: pipelineOptions)
         }
+        let markdown = assembled.markdown
 
         var buildInfo: BuildRecord?
         let trackingOn = project.config.build.trackBuilds && !skipBuildTracking
@@ -92,16 +92,11 @@ struct Build: ParsableCommand {
             }
         }
 
-        let outputPath = output ?? project.defaultOutputPath
-        let copyAssets = project.config.build.copyAssets && !skipAssets
-
-        let publish = try ResourcePublisher.publish(
-            projectRoot: project.root,
-            outputHTMLPath: outputPath,
-            sourceCSS: project.styleSheetPath,
-            diagramsDir: project.config.build.diagramsDir,
-            copyAssets: copyAssets
-        )
+        let published = try CommandBoundary.call {
+            try DocumentPipeline.publishAssets(project: project, options: pipelineOptions)
+        }
+        let publish = published.publish
+        let copyAssets = published.copyAssets
 
         let tocMax: Int = {
             if skipToc || !project.config.build.tocEnabled { return 0 }
@@ -120,6 +115,7 @@ struct Build: ParsableCommand {
         // Resolve to absolute path under project for reliable writes
         let absoluteHTML = project.resolve(outputPath).path
         try DocumentGenerator.writeOutput(html, to: absoluteHTML)
+        print("Wrote \(absoluteHTML)")
 
         if !publish.copiedDescriptions.isEmpty {
             print("📦 Copied \(publish.copiedDescriptions.count) asset(s) into \(displayPath(publish.outputRoot.path, projectRoot: project.root.path))/")

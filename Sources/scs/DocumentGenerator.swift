@@ -85,6 +85,8 @@ struct DocumentGenerator {
 """
     }
 
+    /// Writes content to `path`, creating parent directories as needed.
+    /// Does not print; commands print the `Wrote …` line so library code stays quiet (#21).
     static func writeOutput(_ html: String, to path: String = "output.html") throws {
         let outputURL = URL(fileURLWithPath: path)
         let parent = outputURL.deletingLastPathComponent()
@@ -92,7 +94,6 @@ struct DocumentGenerator {
             try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         }
         try html.write(to: outputURL, atomically: true, encoding: .utf8)
-        print("Wrote \(path)")
     }
 
     /// Assembles Markdown content.

@@ -23,20 +23,19 @@ enum MarkdownExporter {
         let outputRootPath: String
     }
 
-    /// Assemble, render, optionally publish assets, and write the derived GFM file.
+    /// Prepare via `DocumentPipeline`, render GFM, and write the derived file.
     @discardableResult
     static func export(project: SpecticusProject, options: Options = Options()) throws -> Result {
-        var markdown = try DocumentGenerator.assembleSources(
-            input: options.input,
-            baseDirectory: project.root.path,
-            fallbackInput: project.config.build.defaultInput,
-            layout: project.assemblyLayout
+        // Share the HTML output tree (css/img/svg) so build + export stay consistent.
+        let prepared = try DocumentPipeline.prepare(
+            project: project,
+            options: DocumentPipeline.Options(
+                input: options.input,
+                skipHeadingNumbers: options.skipHeadingNumbers,
+                skipAssets: options.skipAssets,
+                outputHTMLPath: project.defaultOutputPath
+            )
         )
-
-        let headingMax = options.skipHeadingNumbers ? 0 : project.config.build.headingNumberMaxLevel
-        if headingMax > 0 {
-            markdown = HeadingNumberer.numberHeadings(in: markdown, maxLevel: headingMax)
-        }
 
         let tocMax: Int = {
             if options.skipToc || !project.config.build.tocEnabled { return 0 }
@@ -44,21 +43,11 @@ enum MarkdownExporter {
         }()
 
         var gfm = render(
-            markdown: markdown,
+            markdown: prepared.markdown,
             title: project.documentTitle,
             tocMaxLevel: tocMax
         )
-
-        let copyAssets = project.config.build.copyAssets && !options.skipAssets
-        // Share the HTML output tree (css/img/svg) so build + export stay consistent (#9 / #5).
-        let publish = try ResourcePublisher.publish(
-            projectRoot: project.root,
-            outputHTMLPath: project.defaultOutputPath,
-            sourceCSS: project.styleSheetPath,
-            diagramsDir: project.config.build.diagramsDir,
-            copyAssets: copyAssets
-        )
-        gfm = rewriteReferences(in: gfm, rewrites: publish.pathRewrites)
+        gfm = rewriteReferences(in: gfm, rewrites: prepared.publish.pathRewrites)
 
         let outputPath = options.output ?? project.config.build.markdownExport
         let absolute = project.resolve(outputPath).path
@@ -67,8 +56,8 @@ enum MarkdownExporter {
         return Result(
             outputPath: outputPath,
             absoluteOutputPath: absolute,
-            copiedAssetCount: publish.copiedDescriptions.count,
-            outputRootPath: publish.outputRoot.path
+            copiedAssetCount: prepared.publish.copiedDescriptions.count,
+            outputRootPath: prepared.publish.outputRoot.path
         )
     }
 
