@@ -24,6 +24,8 @@ as described in [docs/release-process.md](docs/release-process.md).
 
 ### Changed
 
+- `scs lint` is a list of rules that return `LintFinding` values; the command
+  only loads the project, runs the list, prints, and summarizes (#22)
 - ID prefix inference is a `PrefixCatalog` data table (title / filename tokens +
   specificity) instead of two hand-ordered `contains` ladders; `TC` still covers
   both test case and technical constraint (#19)
