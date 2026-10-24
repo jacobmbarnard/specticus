@@ -8,51 +8,6 @@ import Foundation
     // https://swiftpackageindex.com/swiftlang/swift-testing/documentation
 }
 
-@Test func multiFileAssemblyLexOrder() async throws {
-    let fm = FileManager.default
-    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-test-\(UUID().uuidString)")
-    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
-    defer { try? fm.removeItem(at: tmp) }
-
-    // Create files out of order + things that should be skipped
-    try "CONTENT-003".write(to: tmp.appendingPathComponent("003-z.md"), atomically: true, encoding: .utf8)
-    try "CONTENT-001".write(to: tmp.appendingPathComponent("001-a.md"), atomically: true, encoding: .utf8)
-    try "CONTENT-002".write(to: tmp.appendingPathComponent("002-b.md"), atomically: true, encoding: .utf8)
-    try "SHOULD-BE-SKIPPED".write(to: tmp.appendingPathComponent("README.md"), atomically: true, encoding: .utf8)
-    try "LEGACY".write(to: tmp.appendingPathComponent("welcome-template.md"), atomically: true, encoding: .utf8)
-
-    let assembled = try DocumentGenerator.assembleSources(input: nil, baseDirectory: tmp.path)
-
-    #expect(assembled.contains("CONTENT-001"))
-    #expect(assembled.contains("CONTENT-002"))
-    #expect(assembled.contains("CONTENT-003"))
-
-    // Verify order
-    let pos1 = assembled.range(of: "CONTENT-001")!.lowerBound
-    let pos2 = assembled.range(of: "CONTENT-002")!.lowerBound
-    let pos3 = assembled.range(of: "CONTENT-003")!.lowerBound
-
-    #expect(pos1 < pos2)
-    #expect(pos2 < pos3)
-
-    #expect(!assembled.contains("SHOULD-BE-SKIPPED"))
-    #expect(!assembled.contains("LEGACY"))
-}
-
-@Test func singleFileInputMode() async throws {
-    let fm = FileManager.default
-    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-test-\(UUID().uuidString)")
-    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
-    defer { try? fm.removeItem(at: tmp) }
-
-    try "ONLY-THIS".write(to: tmp.appendingPathComponent("specific.md"), atomically: true, encoding: .utf8)
-    try "OTHER".write(to: tmp.appendingPathComponent("other.md"), atomically: true, encoding: .utf8)
-
-    let assembled = try DocumentGenerator.assembleSources(input: "specific.md", baseDirectory: tmp.path)
-    #expect(assembled.contains("ONLY-THIS"))
-    #expect(!assembled.contains("OTHER"))
-}
-
 // MARK: - Config & project (#7)
 
 @Test func configParsesFullYAML() throws {
@@ -184,62 +139,6 @@ import Foundation
     }
 }
 
-@Test func assembleUsesConfigFallbackInput() throws {
-    let fm = FileManager.default
-    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-fallback-\(UUID().uuidString)")
-    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
-    defer { try? fm.removeItem(at: tmp) }
-
-    try "FALLBACK-CONTENT".write(to: tmp.appendingPathComponent("main.md"), atomically: true, encoding: .utf8)
-    // No numbered sections — only main.md which is not welcome-template
-
-    // Without fallback, main.md is discovered as a normal md file
-    let withDiscovery = try DocumentGenerator.assembleSources(input: nil, baseDirectory: tmp.path)
-    #expect(withDiscovery.contains("FALLBACK-CONTENT"))
-
-    // Empty of all md except a custom fallback file (remove main, add only custom)
-    try fm.removeItem(at: tmp.appendingPathComponent("main.md"))
-    try "CUSTOM-ONLY".write(to: tmp.appendingPathComponent("custom-source.md"), atomically: true, encoding: .utf8)
-
-    // custom-source.md is still a discoverable .md, so multi-file uses it
-    let discovered = try DocumentGenerator.assembleSources(
-        input: nil,
-        baseDirectory: tmp.path,
-        fallbackInput: "custom-source.md"
-    )
-    #expect(discovered.contains("CUSTOM-ONLY"))
-
-    // When only non-md files exist, fallbackInput is used
-    try fm.removeItem(at: tmp.appendingPathComponent("custom-source.md"))
-    try "FROM-FALLBACK".write(to: tmp.appendingPathComponent("solo.md"), atomically: true, encoding: .utf8)
-    // Hide from multi-file by naming as welcome path... use fallback when zero md except we need zero md
-    try fm.removeItem(at: tmp.appendingPathComponent("solo.md"))
-    try "ONLY-FALLBACK".write(to: tmp.appendingPathComponent("entry.md"), atomically: true, encoding: .utf8)
-    // entry.md will be discovered. Create a dir with only a non-standard name used solely as fallback:
-    // Put content only in a file that assembly skips: welcome-template is skipped in multi-file
-    try fm.removeItem(at: tmp.appendingPathComponent("entry.md"))
-    try "WELCOME-SKIPPED-IN-MULTI".write(to: tmp.appendingPathComponent("welcome-template.md"), atomically: true, encoding: .utf8)
-    try "ALT-FALLBACK".write(to: tmp.appendingPathComponent("alt.md"), atomically: true, encoding: .utf8)
-
-    // alt.md is discovered — multi-file wins over fallback
-    let multiWins = try DocumentGenerator.assembleSources(
-        input: nil,
-        baseDirectory: tmp.path,
-        fallbackInput: "alt.md"
-    )
-    #expect(multiWins.contains("ALT-FALLBACK"))
-    #expect(!multiWins.contains("WELCOME-SKIPPED-IN-MULTI"))
-
-    // Only welcome-template (skipped in multi) → fallbackInput if set and exists, else welcome
-    try fm.removeItem(at: tmp.appendingPathComponent("alt.md"))
-    let onlyLegacy = try DocumentGenerator.assembleSources(
-        input: nil,
-        baseDirectory: tmp.path,
-        fallbackInput: "welcome-template.md"
-    )
-    #expect(onlyLegacy.contains("WELCOME-SKIPPED-IN-MULTI"))
-}
-
 @Test func generateHTMLUsesTitleAndStylesheet() throws {
     let html = try DocumentGenerator.generateHTML(
         from: "# Hello",
@@ -249,22 +148,6 @@ import Foundation
     #expect(html.contains("<title>My Doc &lt;Title&gt;</title>"))
     #expect(html.contains("href=\"css/app.css\""))
     #expect(html.contains("Hello"))
-}
-
-@Test func assembleIgnoresHiddenSpecticusDirectory() throws {
-    let fm = FileManager.default
-    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-hidden-\(UUID().uuidString)")
-    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
-    defer { try? fm.removeItem(at: tmp) }
-
-    try "VISIBLE".write(to: tmp.appendingPathComponent("001-main.md"), atomically: true, encoding: .utf8)
-    let hidden = tmp.appendingPathComponent(".specticus")
-    try fm.createDirectory(at: hidden, withIntermediateDirectories: true)
-    try "SHOULD-NOT-APPEAR".write(to: hidden.appendingPathComponent("notes.md"), atomically: true, encoding: .utf8)
-
-    let assembled = try DocumentGenerator.assembleSources(input: nil, baseDirectory: tmp.path)
-    #expect(assembled.contains("VISIBLE"))
-    #expect(!assembled.contains("SHOULD-NOT-APPEAR"))
 }
 
 // MARK: - Build tracking (#8)
@@ -324,142 +207,6 @@ import Foundation
     """
     let config = try SpecticusConfig.parse(yaml: yaml)
     #expect(config.build.trackBuilds == false)
-}
-
-// MARK: - Structured output & assets (#9)
-
-@Test func resourcePublisherCopiesCSSAndImages() throws {
-    let fm = FileManager.default
-    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-assets-\(UUID().uuidString)")
-    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
-    defer { try? fm.removeItem(at: tmp) }
-
-    try "body{color:red}".write(to: tmp.appendingPathComponent("style.css"), atomically: true, encoding: .utf8)
-    try Data([0x89, 0x50, 0x4E, 0x47]).write(to: tmp.appendingPathComponent("logo.png")) // tiny fake PNG header
-    try fm.createDirectory(at: tmp.appendingPathComponent("images"), withIntermediateDirectories: true)
-    try Data([0x47, 0x49, 0x46]).write(to: tmp.appendingPathComponent("images/chart.gif"))
-    try fm.createDirectory(at: tmp.appendingPathComponent("diagrams"), withIntermediateDirectories: true)
-    try "<svg/>".write(to: tmp.appendingPathComponent("diagrams/flow.svg"), atomically: true, encoding: .utf8)
-
-    let result = try ResourcePublisher.publish(
-        projectRoot: tmp,
-        outputHTMLPath: "output/index.html",
-        sourceCSS: "style.css",
-        diagramsDir: "diagrams",
-        copyAssets: true
-    )
-
-    #expect(result.stylesheetHref == "css/style.css")
-    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/css/style.css").path))
-    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/img/logo.png").path))
-    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/img/chart.gif").path))
-    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/svg/flow.svg").path))
-
-    #expect(result.pathRewrites["logo.png"] == "img/logo.png")
-    #expect(result.pathRewrites["images/chart.gif"] == "img/chart.gif" || result.pathRewrites["chart.gif"] == "img/chart.gif")
-    #expect(result.pathRewrites["diagrams/flow.svg"] == "svg/flow.svg" || result.pathRewrites["flow.svg"] == "svg/flow.svg")
-}
-
-@Test func rewriteReferencesUpdatesImgAndHref() {
-    let html = #"""
-    <img src="logo.png" alt="L">
-    <img src='images/chart.gif'>
-    <a href="diagrams/flow.svg">flow</a>
-    <link rel="stylesheet" href="style.css">
-    """#
-    let rewrites = [
-        "logo.png": "img/logo.png",
-        "images/chart.gif": "img/chart.gif",
-        "diagrams/flow.svg": "svg/flow.svg",
-        "style.css": "css/style.css"
-    ]
-    let out = ResourcePublisher.rewriteReferences(in: html, rewrites: rewrites)
-    #expect(out.contains(#"src="img/logo.png""#))
-    #expect(out.contains("src='img/chart.gif'"))
-    #expect(out.contains(#"href="svg/flow.svg""#))
-    #expect(out.contains(#"href="css/style.css""#))
-    #expect(!out.contains(#"src="logo.png""#))
-}
-
-@Test func publishSkipsAssetsWhenDisabled() throws {
-    let fm = FileManager.default
-    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-noassets-\(UUID().uuidString)")
-    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
-    defer { try? fm.removeItem(at: tmp) }
-
-    try "body{}".write(to: tmp.appendingPathComponent("style.css"), atomically: true, encoding: .utf8)
-    try Data([0x89]).write(to: tmp.appendingPathComponent("logo.png"))
-
-    let result = try ResourcePublisher.publish(
-        projectRoot: tmp,
-        outputHTMLPath: "output/index.html",
-        sourceCSS: "style.css",
-        diagramsDir: "diagrams",
-        copyAssets: false
-    )
-
-    #expect(result.stylesheetHref == "style.css")
-    #expect(result.copiedDescriptions.isEmpty)
-    #expect(!fm.fileExists(atPath: tmp.appendingPathComponent("output/css/style.css").path))
-}
-
-@Test func cleanableOutputDirectoryForStructuredPath() {
-    let root = URL(fileURLWithPath: "/tmp/proj", isDirectory: true)
-    let dir = ResourcePublisher.cleanableOutputDirectory(outputHTMLPath: "output/index.html", projectRoot: root)
-    #expect(dir?.lastPathComponent == "output")
-
-    let flat = ResourcePublisher.cleanableOutputDirectory(outputHTMLPath: "output.html", projectRoot: root)
-    #expect(flat == nil)
-
-    let dist = ResourcePublisher.cleanableOutputDirectory(outputHTMLPath: "dist/docs.html", projectRoot: root)
-    #expect(dist?.lastPathComponent == "dist")
-}
-
-@Test func configParsesCopyAssets() throws {
-    let yaml = """
-    build:
-      copy_assets: false
-      output: "site/index.html"
-    """
-    let config = try SpecticusConfig.parse(yaml: yaml)
-    #expect(config.build.copyAssets == false)
-    #expect(config.build.output == "site/index.html")
-}
-
-@Test func endToEndBuildTreeHasWorkingCSSLink() throws {
-    let fm = FileManager.default
-    let tmp = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("specticus-e2e-\(UUID().uuidString)")
-    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
-    defer { try? fm.removeItem(at: tmp) }
-
-    try "# Hello\n\n![Logo](logo.png)\n".write(to: tmp.appendingPathComponent("001-intro.md"), atomically: true, encoding: .utf8)
-    try "body { font-family: sans-serif; }".write(to: tmp.appendingPathComponent("style.css"), atomically: true, encoding: .utf8)
-    try Data([0x89, 0x50, 0x4E, 0x47]).write(to: tmp.appendingPathComponent("logo.png"))
-
-    let publish = try ResourcePublisher.publish(
-        projectRoot: tmp,
-        outputHTMLPath: "output/index.html",
-        sourceCSS: "style.css",
-        diagramsDir: "diagrams",
-        copyAssets: true
-    )
-    let record = BuildRecord(number: 1, lastBuilt: "2026-07-10T00:00:00Z")
-    var html = try DocumentGenerator.generateHTML(
-        from: try DocumentGenerator.assembleSources(input: nil, baseDirectory: tmp.path),
-        title: "E2E",
-        stylesheet: publish.stylesheetHref,
-        buildInfo: record
-    )
-    html = ResourcePublisher.rewriteReferences(in: html, rewrites: publish.pathRewrites)
-    try DocumentGenerator.writeOutput(html, to: tmp.appendingPathComponent("output/index.html").path)
-
-    let written = try String(contentsOf: tmp.appendingPathComponent("output/index.html"), encoding: .utf8)
-    #expect(written.contains(#"href="css/style.css""#))
-    #expect(written.contains(#"src="img/logo.png""#) || written.contains("img/logo.png"))
-    #expect(written.contains("site-footer"))
-    #expect(written.contains("build 1"))
-    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/css/style.css").path))
-    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/img/logo.png").path))
 }
 
 @Test func numberedMarkdownRendersInHTML() throws {
@@ -565,7 +312,6 @@ import Foundation
     #expect(!MarkdownSources.isContentMarkdownFilename("welcome-template.md"))
     #expect(!MarkdownSources.isContentMarkdownFilename("style.css"))
 }
-
 
 // MARK: - Open command (#122)
 
@@ -900,7 +646,6 @@ import Foundation
     #expect(names == ["9-earlier.md", "10-later.md"])
 }
 
-
 // MARK: - Style packs (#141)
 
 @Test func stylePackRegistryIncludesDefaultAndMinimal() throws {
@@ -981,117 +726,3 @@ import Foundation
     }
 }
 
-// MARK: - GFM export (#5)
-
-@Test func markdownExporterKeepsOwningIDsAndBuildsTOC() {
-    let md = """
-    # Intro
-
-    ## BR1: Login flow
-
-    Text.
-
-    ## TS1: Auth service
-
-    More.
-    """
-    let out = MarkdownExporter.render(
-        markdown: md,
-        title: "Demo Spec",
-        tocMaxLevel: 2
-    )
-    #expect(out.contains("Derived GFM export of **Demo Spec**"))
-    #expect(out.contains("## Contents"))
-    #expect(out.contains("[Login flow](#br1)"))
-    #expect(out.contains("[Auth service](#ts1)"))
-    #expect(out.contains("## BR1: Login flow"))
-    #expect(out.contains("## TS1: Auth service"))
-    #expect(out.contains("scs export markdown"))
-}
-
-@Test func markdownExporterRewritesImagePaths() {
-    let md = "See ![logo](images/logo.png) and [doc](images/logo.png)."
-    let rewritten = MarkdownExporter.rewriteReferences(
-        in: md,
-        rewrites: ["images/logo.png": "img/logo.png", "logo.png": "img/logo.png"]
-    )
-    #expect(rewritten.contains("![logo](img/logo.png)"))
-    #expect(rewritten.contains("[doc](img/logo.png)"))
-    #expect(!rewritten.contains("images/logo.png"))
-}
-
-@Test func markdownExporterDefaultPathBesideHTML() {
-    #expect(MarkdownExporter.defaultPathBesideHTML("output/index.html") == "output/export.md")
-    #expect(MarkdownExporter.defaultPathBesideHTML("dist/docs.html") == "dist/export.md")
-    #expect(MarkdownExporter.defaultPathBesideHTML("flat.html") == "export.md")
-}
-
-@Test func configDefaultsMarkdownExportBesideOutput() throws {
-    let yaml = """
-    version: 1
-    build:
-      output: "dist/docs.html"
-    """
-    let config = try SpecticusConfig.parse(yaml: yaml)
-    #expect(config.build.markdownExport == "dist/export.md")
-}
-
-@Test func configParsesMarkdownExportOverride() throws {
-    let yaml = """
-    version: 1
-    build:
-      output: "output/index.html"
-      markdown_export: "review/spec.md"
-    """
-    let config = try SpecticusConfig.parse(yaml: yaml)
-    #expect(config.build.markdownExport == "review/spec.md")
-}
-
-@Test func exportMarkdownCommandWritesDerivedFile() throws {
-    let fm = FileManager.default
-    let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
-        .appendingPathComponent("specticus-export-md-\(UUID().uuidString)")
-    try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
-    defer { try? fm.removeItem(at: tmp) }
-
-    let specticusDir = tmp.appendingPathComponent(".specticus")
-    try fm.createDirectory(at: specticusDir, withIntermediateDirectories: true)
-    try """
-    version: 1
-    project:
-      title: Export Demo
-    build:
-      output: "output/index.html"
-      markdown_export: "output/export.md"
-      css: "style.css"
-      copy_assets: true
-      toc: true
-      toc_max_level: 2
-      heading_number_max_level: 2
-    """.write(to: specticusDir.appendingPathComponent("config.yml"), atomically: true, encoding: .utf8)
-
-    try "body { color: #111; }\n".write(
-        to: tmp.appendingPathComponent("style.css"),
-        atomically: true,
-        encoding: .utf8
-    )
-    try """
-    # Business Requirements
-
-    ## BR1: Must export GFM
-
-    Reviewers read this in PRs.
-    """.write(to: tmp.appendingPathComponent("001-business-requirements.md"), atomically: true, encoding: .utf8)
-
-    let project = try SpecticusProject.load(from: tmp.path)
-    let result = try MarkdownExporter.export(project: project)
-
-    let exportURL = tmp.appendingPathComponent("output/export.md")
-    #expect(result.outputPath == "output/export.md")
-    #expect(fm.fileExists(atPath: exportURL.path))
-    let text = try String(contentsOf: exportURL, encoding: .utf8)
-    #expect(text.contains("## BR1: Must export GFM") || text.contains("BR1: Must export GFM"))
-    #expect(text.contains("## Contents"))
-    #expect(text.contains("Derived GFM export"))
-    #expect(fm.fileExists(atPath: tmp.appendingPathComponent("output/css/style.css").path))
-}

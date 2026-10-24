@@ -27,6 +27,9 @@ as described in [docs/release-process.md](docs/release-process.md).
 - ID prefix inference is a `PrefixCatalog` data table (title / filename tokens +
   specificity) instead of two hand-ordered `contains` ladders; `TC` still covers
   both test case and technical constraint (#19)
+- `scs build` and `scs export markdown` share `DocumentPipeline` for assemble →
+  optional heading numbers → asset publish; `DocumentGenerator.writeOutput` no
+  longer prints (commands print `Wrote …`) (#21)
 - `IdsManager` is a thin facade: scanning, `ids.json` / audit persistence,
   assignment, and user-facing text live in `IdsScanner`, `IdsStore`,
   `IdsAssigner`, and `IdsReporter` (#20)

@@ -58,6 +58,8 @@ struct ExportMarkdown: ParsableCommand {
             )
         }
 
+        print("Wrote \(result.absoluteOutputPath)")
+
         if result.copiedAssetCount > 0 {
             print(
                 "📦 Copied \(result.copiedAssetCount) asset(s) into \(displayPath(result.outputRootPath, projectRoot: project.root.path))/"
